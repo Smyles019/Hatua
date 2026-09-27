@@ -1,0 +1,53 @@
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#ffffff", "primaryBorderColor": "#000000", "primaryTextColor": "#000000", "lineColor": "#000000", "tertiaryColor": "#ffffff", "fontFamily": "Times New Roman"}}}%%
+erDiagram
+    USERS ||--o{ CHILDREN : cares_for
+    USERS |o--o{ USERS : assigned_to
+    CHILDREN ||--o{ CAREGIVER_INPUTS : has
+    CAREGIVER_INPUTS ||--|| PREDICTION_RESULTS : produces
+    CHILDREN ||--|| MILESTONE_SUMMARIES : summarised_in
+    USERS |o--o{ PREDICTION_RESULTS : reviews
+
+    USERS {
+        uuid user_id PK
+        varchar full_name
+        varchar phone_number UK
+        varchar password_hash
+        varchar role
+        uuid linked_chw_id FK
+        timestamp created_at
+    }
+    CHILDREN {
+        uuid child_id PK
+        uuid caregiver_id FK
+        varchar first_name
+        date date_of_birth
+        varchar sex
+        varchar location
+        timestamp created_at
+    }
+    CAREGIVER_INPUTS {
+        uuid input_id PK
+        uuid child_id FK
+        int age_months
+        varchar age_band
+        jsonb responses
+        timestamp submitted_at
+    }
+    PREDICTION_RESULTS {
+        uuid prediction_id PK
+        uuid input_id FK
+        varchar risk_level
+        boolean anomaly_flag
+        jsonb shap_values
+        varchar model_version
+        varchar chw_outcome
+        uuid reviewed_by FK
+        timestamp reviewed_at
+        timestamp created_at
+    }
+    MILESTONE_SUMMARIES {
+        uuid summary_id PK
+        uuid child_id FK
+        jsonb domain_status
+        timestamp updated_at
+    }

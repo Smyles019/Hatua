@@ -1,0 +1,103 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 13
+skinparam linetype ortho
+skinparam nodesep 80
+skinparam ranksep 90
+skinparam class {
+  BackgroundColor white
+  BorderColor black
+}
+hide circle
+hide empty members
+
+class DatabaseService {
+  saveUser(User user)
+  saveAssessment(Assessment assessment)
+  savePrediction(PredictionResult result)
+}
+
+class User {
+  userId
+  fullName
+  phoneNumber
+  password
+  role
+  linkedChwId
+  --
+  login()
+  updateProfile()
+  getChildren()
+}
+
+class Child {
+  childId
+  firstName
+  dateOfBirth
+  sex
+  location
+  --
+  getAgeBand()
+  getResults()
+}
+
+class Assessment {
+  inputId
+  ageBand
+  responses
+  submittedAt
+  --
+  validate()
+  submit()
+}
+
+class MilestoneSummary {
+  summaryId
+  domainStatus
+  updatedAt
+  --
+  update()
+}
+
+class Preprocessor {
+  responses
+  featureVector
+  --
+  encodeResponses()
+  imputeMissing()
+  scaleFeatures()
+}
+
+class RiskModel {
+  xgboostModel
+  anomalyDetector
+  shapExplainer
+  --
+  loadModel()
+  predictRisk()
+  detectAnomaly()
+  explain()
+}
+
+class PredictionResult {
+  predictionId
+  riskLevel
+  anomalyFlag
+  shapValues
+  chwOutcome
+  --
+  getExplanation()
+  getOutcomeMessage()
+}
+
+DatabaseService "1" - "1" User : uses
+User "1" - "M" Child : has
+Child "1" -- "M" Assessment : has
+Child "1" -- "1" MilestoneSummary : has
+Assessment "M" -- "1" Preprocessor : processed by
+Preprocessor "1" -left- "1" RiskModel : feeds
+RiskModel "1" -left- "M" PredictionResult : generates
+DatabaseService "1" -- "M" PredictionResult : stores
+@enduml

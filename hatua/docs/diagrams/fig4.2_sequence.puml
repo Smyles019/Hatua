@@ -1,0 +1,54 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 13
+skinparam sequenceMessageAlign center
+skinparam participant {
+  BackgroundColor white
+  BorderColor black
+}
+skinparam actor {
+  BackgroundColor white
+  BorderColor black
+}
+skinparam database {
+  BackgroundColor white
+  BorderColor black
+}
+hide footbox
+
+actor "Caregiver" as CG
+participant "Flutter App" as APP
+participant "FastAPI Backend" as API
+participant "ML Pipeline" as ML
+database "PostgreSQL" as DB
+
+CG -> APP : Submit milestone assessment
+activate APP
+APP -> API : POST assessment (child ID, answers)
+activate API
+API -> API : Validate input
+API -> DB : Save caregiver input
+activate DB
+DB --> API : Input saved
+deactivate DB
+
+API -> ML : Send answers for prediction
+activate ML
+ML -> ML : Preprocess into features
+ML -> ML : Classify risk (XGBoost)
+ML -> ML : Check for anomaly (Deep Isolation Forest)
+ML -> ML : Compute domain explanations (SHAP)
+ML --> API : Risk level, anomaly flag, explanations
+deactivate ML
+
+API -> DB : Save prediction and milestone summary
+activate DB
+DB --> API : Result saved
+deactivate DB
+API --> APP : Return result
+deactivate API
+APP --> CG : Display risk level and explanation
+deactivate APP
+@enduml

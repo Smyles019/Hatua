@@ -1,0 +1,44 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 13
+skinparam activity {
+  BackgroundColor white
+  BorderColor black
+  DiamondBackgroundColor white
+  DiamondBorderColor black
+}
+
+start
+if (Authenticated?) then (no)
+  repeat
+    :Login or Register;
+  repeat while (Success?) is (no) not (yes)
+else (yes)
+endif
+:Main Menu;
+
+if (User role?) then (Caregiver)
+  repeat
+    :Choose Action;
+    if (Action?) then (Complete Assessment)
+      repeat
+        :Answer age-banded questions;
+      repeat while (Responses complete?) is (no) not (yes)
+      :Generate risk prediction and explanation;
+      :Show results;
+      if (Medium or high risk, or flagged?) then (yes)
+        :Send case to CHW dashboard;
+      else (no)
+      endif
+    else (View Milestone History)
+      :Show milestone summary;
+    endif
+  repeat while (Continue?) is (yes) not (no)
+else (CHW)
+  :Review flagged case;
+  :Log referral outcome;
+endif
+stop
+@enduml

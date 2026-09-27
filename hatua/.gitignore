@@ -1,0 +1,41 @@
+# ---- Data: never commit (DHS and MICS terms forbid redistribution) ----
+data/**
+!data/**/
+!data/**/.gitkeep
+!data/README.md
+*.dta
+*.sav
+*.rda
+*.sas7bdat
+*.DAT
+
+# ---- Model artefacts ----
+ml/artefacts/*
+!ml/artefacts/.gitkeep
+*.pkl
+*.joblib
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# ---- Secrets ----
+.env
+
+# ---- Flutter ----
+app/build/
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/android/.gradle/
+app/android/local.properties
+
+# ---- OS / editors ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
