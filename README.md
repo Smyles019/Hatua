@@ -25,14 +25,33 @@ Final-year ICS capstone, Strathmore University.
 ## Setup
 
 ```bash
+cd ml
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r ml/requirements.txt
+pip install -r requirements.txt
+pip install -e .
 ```
 
-Place the raw data files as described in `data/README.md`, then:
+## Data
+
+Place the raw data files as described in `data/README.md`.
+
+To keep the data outside the repository (for example on Google Drive when training on Colab), set `HATUA_DATA_DIR` to the folder that contains `raw/`:
 
 ```bash
-cd ml
-python -m hatua_ml.data.load_kdhs     # prints a summary of the KDHS ECD sample
+export HATUA_DATA_DIR=/content/drive/MyDrive/hatua-data     # PowerShell: $env:HATUA_DATA_DIR = "D:\hatua-data"
 ```
+
+If a file is missing, the loaders raise `DataFileNotFoundError` with the dataset name and the exact path they looked for. File names are case-sensitive on Linux and Colab.
+
+## Loading and tests
+
+From `ml/`:
+
+```bash
+python -m hatua_ml.data.load_kdhs     # KDHS 2022 ECD sample summary
+python -m hatua_ml.data.load_mics     # MICS6 Eswatini and Comoros summaries
+pytest
+```
+
+Every loaded sample is validated (age range, weights, item coding, target). Tests that need the real survey files are skipped when the files are not present.
