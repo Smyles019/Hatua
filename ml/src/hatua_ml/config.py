@@ -1,8 +1,9 @@
 """Project paths. All paths resolve from the repository root."""
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-DATA = ROOT / "data"
+DATA = Path(os.environ.get("HATUA_DATA_DIR", ROOT / "data"))
 RAW = DATA / "raw"
 INTERIM = DATA / "interim"
 PROCESSED = DATA / "processed"
