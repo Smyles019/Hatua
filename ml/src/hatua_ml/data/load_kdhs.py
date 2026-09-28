@@ -2,6 +2,7 @@
 import pandas as pd
 
 from hatua_ml.config import KDHS_FILE
+from hatua_ml.data.files import require_file
 from hatua_ml.features.ecdi2030 import ITEMS, harmonise, on_track
 
 CONTEXT = {
@@ -19,6 +20,7 @@ CONTEXT = {
 
 
 def load_kdhs(path=KDHS_FILE) -> pd.DataFrame:
+    path = require_file(path, "KDHS 2022 Children's Recode (KEKR8CFL.DTA)")
     raw = pd.read_stata(path, convert_categoricals=False)
     raw = raw[raw["ecd21"].notna()].copy()          # children in the ECD module only
     df = raw[list(CONTEXT)].rename(columns=CONTEXT)
