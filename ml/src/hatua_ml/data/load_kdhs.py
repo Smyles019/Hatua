@@ -4,6 +4,7 @@ import pandas as pd
 from hatua_ml.config import KDHS_FILE
 from hatua_ml.data.files import require_file
 from hatua_ml.features.ecdi2030 import ITEMS, harmonise, on_track
+from hatua_ml.data.validate import validate_sample
 
 CONTEXT = {
     "b19": "age_months",
@@ -29,7 +30,7 @@ def load_kdhs(path=KDHS_FILE) -> pd.DataFrame:
     df = df.join(harmonise(raw, "dhs"))
     df["on_track"] = on_track(df[ITEMS], df["age_months"])
     df["source"] = "kdhs_2022"
-    return df.reset_index(drop=True)
+    return validate_sample(df.reset_index(drop=True), "kdhs_2022")
 
 
 if __name__ == "__main__":
