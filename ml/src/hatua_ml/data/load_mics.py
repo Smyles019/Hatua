@@ -3,12 +3,15 @@ import pandas as pd
 import pyreadstat
 
 from hatua_ml.config import MICS_FILES
+from hatua_ml.data.files import require_file
 from hatua_ml.features.ecdi2030 import ITEMS, harmonise, on_track
 
 
-def load_mics(country: str) -> pd.DataFrame:
-    raw, _ = pyreadstat.read_sav(str(MICS_FILES[country]))
-    raw = raw[raw["EC21"].notna()].copy()
+def load_mics(country: str, path=None) -> pd.DataFrame:
+    if country not in MICS_FILES:
+        raise ValueError(f"Unknown MICS country {country!r}. Expected one of: {sorted(MICS_FILES)}")
+    path = require_file(path or MICS_FILES[country], f"MICS6 child file for {country} (ch.sav)")
+    raw, _ = pyreadstat.read_sav(str(path))
     df = pd.DataFrame({
         "age_months": raw["CAGE"],
         "sex": raw["HL4"] if "HL4" in raw else pd.NA,
