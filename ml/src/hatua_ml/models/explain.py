@@ -72,19 +72,37 @@ class Explainer:
 
     background: model_inputs(...) of the TRAINING children, same items as the model.
     threshold:  the model's saved risk cut-off, used for the flagged rule.
+    peer_stats: alternative to background, as returned by peer_stats(); lets the API
+                rebuild the explainer without loading any training data.
     """
 
-    def __init__(self, model, items: list[str], background: pd.DataFrame, threshold: float):
+    def __init__(self, model, items: list[str], background: pd.DataFrame | None = None,
+                 threshold: float = 0.5, peer_stats: dict | None = None):
         self.model, self.items, self.threshold = model, list(items), float(threshold)
         self._tree = shap.TreeExplainer(model)
         self._peer_mean, self._base = {}, {}
+        if peer_stats is not None:
+            for key, s in peer_stats.items():
+                band = tuple(int(x) for x in key.split("-"))
+                self._peer_mean[band] = pd.Series(s["mean"], dtype=float)
+                self._base[band] = float(s["base"])
+            return
         # Group peers with the same rule used to place a child in a band.
         for band, peers in background.groupby(background["age_months"].map(age_band)):
             self._peer_mean[band] = self._raw(peers).mean()
             self._base[band] = float(model.predict(peers, output_margin=True).mean())
 
+    def peer_stats(self) -> dict:
+        """Same-age averages as plain JSON-ready numbers, keyed "24-29", "30-35", ..."""
+        return {f"{lo}-{hi}": {"mean": {k: float(v) for k, v in self._peer_mean[(lo, hi)].items()},
+                               "base": self._base[(lo, hi)]}
+                for lo, hi in sorted(self._peer_mean)}
+
     def _raw(self, X: pd.DataFrame) -> pd.DataFrame:
-        return pd.DataFrame(self._tree.shap_values(X), index=X.index, columns=X.columns)
+        # float64 throughout, so an explainer rebuilt from saved peer_stats (JSON, float64)
+        # gives bit-identical results to one built from training data.
+        values = np.asarray(self._tree.shap_values(X), dtype=np.float64)
+        return pd.DataFrame(values, index=X.index, columns=X.columns)
 
     def base(self, age_months: float) -> float:
         """Average model output (log-odds) for training children in this age band."""
