@@ -8,7 +8,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict
 
 from hatua_ml.models.split import SEED
 
-TARGET_SENSITIVITY = 0.90
+TARGET_SENSITIVITY = 0.95  # missing an off-track child is the costlier error (#27)
 
 
 def cv():
@@ -16,7 +16,7 @@ def cv():
 
 
 def choose_threshold(model, X, y) -> float:
-    """Cut-off that flags 90% of off-track children, chosen on training data only."""
+    """Cut-off that flags TARGET_SENSITIVITY of off-track children, chosen on training data only."""
     p = cross_val_predict(model, X, y, cv=cv(), method="predict_proba")[:, 1]
     return float(np.quantile(p[np.asarray(y) == 1], 1 - TARGET_SENSITIVITY))
 
