@@ -1,0 +1,25 @@
+# Local PostgreSQL for development and tests (#10).
+#   Start:  docker compose up -d
+#   Stop:   docker compose down          (data kept in the hatua_pgdata volume)
+#   Reset:  docker compose down -v       (deletes all local data)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hatua-db
+    environment:
+      POSTGRES_USER: hatua
+      POSTGRES_PASSWORD: hatua_dev_password  # local development only
+      POSTGRES_DB: hatua
+    ports:
+      - "5432:5432"
+    volumes:
+      - hatua_pgdata:/var/lib/postgresql/data
+      - ./backend/db-init:/docker-entrypoint-initdb.d:ro  # creates hatua_test on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hatua -d hatua"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  hatua_pgdata:
