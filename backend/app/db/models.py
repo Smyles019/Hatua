@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer,
-                        MetaData, String, func)
+                        MetaData, String, func, text, true)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -16,6 +16,7 @@ ROLES = ("caregiver", "chw", "admin")
 SEXES = ("male", "female")
 RISK_LEVELS = ("low", "medium", "high")
 CHW_OUTCOMES = ("refer_to_facility", "reviewed_not_concerning", "unreachable")
+AVATARS = ("lion", "elephant", "giraffe", "zebra", "hippo", "monkey", "cheetah", "rhino")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -43,21 +44,36 @@ def _now():
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = (CheckConstraint(_in("role", ROLES), name="role_valid"),)
+    __table_args__ = (
+        CheckConstraint(_in("role", ROLES), name="role_valid"),
+        # every account has a way to sign in: a Hatua password, a Google account, or both
+        CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL",
+                        name="has_sign_in"),
+    )
 
     user_id: Mapped[uuid.UUID] = _uuid()
     full_name: Mapped[str] = mapped_column(String(100))
     phone_number: Mapped[str] = mapped_column(String(15), unique=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    # Google sign-in (caregivers only). google_id is Google's stable "sub" claim.
+    email: Mapped[str | None] = mapped_column(String(254), unique=True)
+    google_id: Mapped[str | None] = mapped_column(String(64), unique=True)
     role: Mapped[str] = mapped_column(String(20))
     linked_chw_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.user_id", ondelete="SET NULL"), index=True)
+    # Deactivated accounts cannot sign in. Used instead of deleting, so recorded CHW
+    # outcomes keep their reviewer (see PredictionResult.reviewed_by).
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
     created_at: Mapped[datetime] = _now()
 
 
 class Child(Base):
     __tablename__ = "children"
-    __table_args__ = (CheckConstraint(_in("sex", SEXES), name="sex_valid"),)
+    __table_args__ = (
+        CheckConstraint(_in("sex", SEXES), name="sex_valid"),
+        CheckConstraint(f"avatar_id IS NULL OR {_in('avatar_id', AVATARS)}",
+                        name="avatar_valid"),
+    )
 
     child_id: Mapped[uuid.UUID] = _uuid()
     caregiver_id: Mapped[uuid.UUID] = mapped_column(
@@ -66,6 +82,12 @@ class Child(Base):
     date_of_birth: Mapped[date] = mapped_column(Date)
     sex: Mapped[str] = mapped_column(String(10))
     location: Mapped[str] = mapped_column(String(100))
+    # Animal avatar shown instead of a photo; the app never stores pictures of children.
+    avatar_id: Mapped[str | None] = mapped_column(String(20))
+    # Weight and height entries, oldest first: [{"measured_on", "weight_kg", "height_cm"}].
+    # JSONB on the child keeps the five-table design.
+    growth: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
+                                         default=list)
     created_at: Mapped[datetime] = _now()
 
 
