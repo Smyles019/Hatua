@@ -1,0 +1,21 @@
+milestone,who_item,cohort,instrument,item,visits,children,age_from,age_to,who_median,cohort_median,median_ci_low,median_ci_high,who_window_end,older_than_window,not_achieved_past_window_pct,gap_vs_who_pct_points
+Sitting without support,who_sit,South Africa,Griffiths,grigmd017,760,706,4.1,16.0,5.9,5.3,5.1,5.5,9.2,275,0.0,10.6
+Sitting without support,who_sit,Netherlands,Van Wiechen,ddigmd063,3519,1913,7.1,13.5,5.9,7.9,7.7,8.1,9.2,2190,5.3,-13.0
+Sitting without support,who_sit,Colombia,WHO MGRS items,mdsgmd001,216,216,6.0,19.1,5.9,6.4,5.6,6.9,9.2,169,0.0,-1.3
+Sitting without support,who_sit,Colombia,ASQ-3 (caregiver),aqigmc016,77,77,7.1,11.6,5.9,,,,9.2,39,2.6,-5.0
+Standing with assistance,who_stand_assist,Netherlands,Van Wiechen,ddigmm065,3443,1906,7.1,13.5,7.4,9.5,9.3,9.6,11.4,1727,13.7,-27.9
+Standing with assistance,who_stand_assist,Colombia,WHO MGRS items,mdsgmd003,216,216,6.0,19.1,7.4,9.4,9.0,9.9,11.4,127,2.4,-15.7
+Standing with assistance,who_stand_assist,Colombia,ASQ-3 (caregiver),aqigmc018,76,76,7.1,11.6,7.4,8.5,8.0,8.9,11.4,3,0.0,-17.1
+Hands-and-knees crawling,who_crawl,South Africa,Griffiths,grigmd022,275,275,12.0,16.0,8.3,,,,13.5,171,0.0,0.6
+Hands-and-knees crawling,who_crawl,Netherlands,Van Wiechen,ddigmm066,3376,1847,10.5,18.4,8.3,,,,13.5,1735,6.4,-10.4
+Hands-and-knees crawling,who_crawl,Colombia,WHO MGRS items,mdsgmd002,215,215,6.0,19.1,8.3,9.4,9.0,9.8,13.5,99,0.0,-8.3
+Walking with assistance,who_walk_assist,South Africa,Bayley I,by1pdd042,275,275,12.0,16.0,9.0,,,,13.7,163,1.8,-1.8
+Walking with assistance,who_walk_assist,Netherlands,Van Wiechen,ddigmm067,3393,1856,10.5,18.4,9.0,,,,13.7,1733,5.6,-9.5
+Walking with assistance,who_walk_assist,Colombia,WHO MGRS items,mdsgmd004,216,216,6.0,19.1,9.0,10.8,10.3,11.3,13.7,97,3.1,-13.9
+Walking with assistance,who_walk_assist,Colombia,ASQ-3 (caregiver),aqigmc023,69,69,11.1,15.5,9.0,11.7,10.9,12.2,13.7,27,0.0,-19.9
+Standing alone,who_stand_alone,South Africa,Bayley I,by1pdd045,275,275,12.0,16.0,10.8,,,,16.9,0,,1.9
+Standing alone,who_stand_alone,Colombia,WHO MGRS items,mdsgmd005,215,215,6.0,19.1,10.8,12.8,12.3,13.3,16.9,46,2.2,-14.1
+Walking alone,who_walk_alone,South Africa,Bayley I,by1pdd046,275,275,12.0,16.0,12.0,,,,17.6,0,,2.9
+Walking alone,who_walk_alone,Netherlands,Van Wiechen,ddigmd068,3234,1746,13.1,23.1,12.0,13.6,13.4,13.9,17.6,1511,5.2,-13.1
+Walking alone,who_walk_alone,Colombia,WHO MGRS items,mdsgmd006,216,216,6.0,19.1,12.0,14.0,13.5,14.6,17.6,34,8.8,-13.9
+Walking alone,who_walk_alone,Colombia,ASQ-3 (caregiver),aqigmc026,105,105,11.1,17.3,12.0,13.6,13.1,14.2,17.6,0,,-19.1
