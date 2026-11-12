@@ -1,0 +1,6 @@
+# Caddy gets and renews the HTTPS certificate for DOMAIN on its own (Let's Encrypt).
+# Ports 80 and 443 must be open to the internet and DOMAIN must point at this server.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy api:8000
+}

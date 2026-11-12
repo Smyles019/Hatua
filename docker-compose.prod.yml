@@ -1,0 +1,35 @@
+# Production on the EC2 server: the API behind Caddy (HTTPS). The database is Amazon RDS,
+# so there is no db service here. On the server, next to this file:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f api
+# Settings come from .env.prod (copy .env.prod.example; it never leaves the server).
+services:
+  api:
+    image: ${API_IMAGE:?set API_IMAGE in .env.prod}
+    container_name: hatua-api
+    env_file: .env.prod
+    environment:
+      DEV_MODE: "false"
+    restart: unless-stopped
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: hatua-caddy
+    depends_on:
+      - api
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.prod}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # certificates; keep this volume or Caddy re-requests them
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
