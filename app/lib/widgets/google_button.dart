@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../theme/colors.dart';
 import '../theme/theme.dart';
+import '../i18n/strings.dart';
 
 /// Google's standard multicolour "G" mark (from Google's sign-in branding resources).
 const googleLogoSvg = '''
@@ -19,7 +20,7 @@ class GoogleLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      SvgPicture.string(googleLogoSvg, width: size, height: size, semanticsLabel: 'Google');
+      SvgPicture.string(googleLogoSvg, width: size, height: size, semanticsLabel: tr('Google'));
 }
 
 /// White pill "Continue with Google" button (card colour in dark mode).
@@ -42,7 +43,7 @@ class GoogleButton extends StatelessWidget {
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         const GoogleLogo(),
         const SizedBox(width: Space.s3),
-        Text(busy ? 'Connecting to Google...' : 'Continue with Google',
+        Text(busy ? tr('Connecting to Google...') : tr('Continue with Google'),
             style: Theme.of(context).textTheme.labelLarge?.copyWith(color: c.plum900)),
       ]),
     );

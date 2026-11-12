@@ -10,6 +10,7 @@ import '../../widgets/common.dart';
 import '../../widgets/risk_chip.dart';
 import 'case_review_screen.dart';
 import 'chw_data.dart';
+import '../../i18n/strings.dart';
 
 /// Cases this CHW has already logged an outcome for. Tapping one allows a correction.
 class OutcomesTab extends StatefulWidget {
@@ -39,7 +40,7 @@ class _OutcomesTabState extends State<OutcomesTab> {
     final t = Theme.of(context).textTheme;
     final df = DateFormat('d MMM yyyy');
     return Scaffold(
-      appBar: AppBar(title: Text('Outcomes')),
+      appBar: AppBar(title: Text(tr('Outcomes'))),
       body: RefreshIndicator(
         color: context.hc.plum700,
         onRefresh: () async {
@@ -53,8 +54,8 @@ class _OutcomesTabState extends State<OutcomesTab> {
             builder: (context, done) => Column(children: [
               if (done.isEmpty)
                 EmptyPanel(
-                  title: 'No outcomes yet',
-                  message: 'Outcomes you log for flagged children appear here.',
+                  title: tr('No outcomes yet'),
+                  message: tr('Outcomes you log for flagged children appear here.'),
                   icon: Icons.fact_check_outlined,
                 ),
               for (final a in done) ...[
@@ -66,7 +67,7 @@ class _OutcomesTabState extends State<OutcomesTab> {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(a.childName, style: t.titleMedium),
                         Text(outcomeLabels[a.chwOutcome] ?? '', style: t.bodyMedium),
-                        Text('Logged ${df.format(a.reviewedAt!)}', style: t.bodySmall),
+                        Text(tr('Logged {date}', {'date': df.format(a.reviewedAt!)}), style: t.bodySmall),
                       ]),
                     ),
                     RiskChip.risk(a.riskLevel, audience: Audience.chw),

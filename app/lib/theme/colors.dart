@@ -140,7 +140,9 @@ class HatuaPalette extends ThemeExtension<HatuaPalette> {
     header: Color(0xFF4E2547),
     onHeader: Color(0xFFFFFFFF),
     sun500: Color(0xFFD9A53A),
-    sun100: Color(0xFF3A2C14),
+    // Pale yellow cards turn a soft dark blue in dark mode (as on the website): the
+    // brown that a dark yellow gives looked muddy.
+    sun100: Color(0xFF1F2D3D),
     sky500: Color(0xFF7FA9D1),
     sky100: Color(0xFF1F2D3D),
     blush500: Color(0xFFD9918A),

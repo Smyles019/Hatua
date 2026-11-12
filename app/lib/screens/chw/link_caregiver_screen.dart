@@ -6,6 +6,7 @@ import '../../state/session.dart';
 import '../../theme/colors.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
+import '../../i18n/strings.dart';
 
 /// Link a caregiver who already has an account (by phone), or enrol a new one during a
 /// household visit. Both end with the caregiver linked to this CHW.
@@ -23,19 +24,19 @@ class _LinkCaregiverScreenState extends State<LinkCaregiverScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: Text('Link a caregiver')),
+      appBar: AppBar(title: Text(tr('Link a caregiver'))),
       body: ListView(padding: EdgeInsets.all(Space.s4), children: [
         Row(children: [
           Expanded(
             child: ChoiceOption(
-                label: 'Has an account',
+                label: tr('Has an account'),
                 selected: !_enrol,
                 onTap: () => setState(() => _enrol = false)),
           ),
           SizedBox(width: Space.s2),
           Expanded(
             child: ChoiceOption(
-                label: 'New caregiver',
+                label: tr('New caregiver'),
                 selected: _enrol,
                 onTap: () => setState(() => _enrol = true)),
           ),
@@ -43,9 +44,8 @@ class _LinkCaregiverScreenState extends State<LinkCaregiverScreen> {
         SizedBox(height: Space.s4),
         Text(
           _enrol
-              ? 'Create an account for the caregiver. Give them the password so they can '
-                  'sign in and change it.'
-              : 'Enter the phone number the caregiver signed up with.',
+              ? tr('Create an account for the caregiver. Give them the password so they can sign in and change it.')
+              : tr('Enter the phone number the caregiver signed up with.'),
           style: t.bodyMedium,
         ),
         SizedBox(height: Space.s4),
@@ -96,7 +96,7 @@ class _LinkFormState extends State<_LinkForm> {
       key: _form,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         LabeledField(
-          label: "Caregiver's phone number",
+          label: tr("Caregiver's phone number"),
           controller: _phone,
           hint: '0712 345 678',
           icon: Icons.search_rounded,
@@ -106,7 +106,7 @@ class _LinkFormState extends State<_LinkForm> {
         ),
         SizedBox(height: Space.s4),
         FilledButton(
-            onPressed: _busy ? null : _link, child: Text(_busy ? 'Linking...' : 'Link to me')),
+            onPressed: _busy ? null : _link, child: Text(_busy ? tr('Linking...') : tr('Link to me'))),
         if (_linked != null) ...[
           SizedBox(height: Space.s4),
           HatuaCard(
@@ -115,7 +115,7 @@ class _LinkFormState extends State<_LinkForm> {
               InitialAvatar(_linked!.fullName, color: context.hc.sky500),
               SizedBox(width: Space.s3),
               Expanded(
-                child: Text('${_linked!.fullName} is now linked to you.', style: t.bodyMedium),
+                child: Text(tr('{fullName} is now linked to you.', {'fullName': _linked!.fullName}), style: t.bodyMedium),
               ),
             ]),
           ),
@@ -135,6 +135,7 @@ class _EnrolForm extends StatefulWidget {
 class _EnrolFormState extends State<_EnrolForm> {
   final _form = GlobalKey<FormState>();
   final _name = TextEditingController();
+  final _email = TextEditingController();
   final _phone = TextEditingController();
   final _password = TextEditingController();
   bool _busy = false;
@@ -142,6 +143,7 @@ class _EnrolFormState extends State<_EnrolForm> {
   @override
   void dispose() {
     _name.dispose();
+    _email.dispose();
     _phone.dispose();
     _password.dispose();
     super.dispose();
@@ -154,12 +156,13 @@ class _EnrolFormState extends State<_EnrolForm> {
     try {
       await s.api.post('/chw/caregivers', {
         'full_name': _name.text.trim(),
+        'email': _email.text.trim(),
         'phone_number': _phone.text.trim(),
         'password': _password.text,
       });
       s.dataChanged();
       if (mounted) {
-        showMessage(context, '${_name.text.trim()} was enrolled and linked to you.');
+        showMessage(context, tr('{name} was enrolled and linked to you. They need to open the link we emailed them before they can sign in.', {'name': _name.text.trim()}));
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -175,13 +178,21 @@ class _EnrolFormState extends State<_EnrolForm> {
       key: _form,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         LabeledField(
-            label: 'Full name',
+            label: tr('Full name'),
             controller: _name,
             icon: Icons.person_outline_rounded,
-            validator: (v) => requiredField(v, 'their name')),
+            validator: (v) => requiredField(v, tr('their name'))),
         SizedBox(height: Space.s3),
         LabeledField(
-            label: 'Phone number',
+            label: tr('Email (they sign in with it)'),
+            controller: _email,
+            hint: 'amina@example.com',
+            icon: Icons.mail_outline_rounded,
+            keyboardType: TextInputType.emailAddress,
+            validator: emailValidator),
+        SizedBox(height: Space.s3),
+        LabeledField(
+            label: tr('Phone number'),
             controller: _phone,
             hint: '0712 345 678',
             icon: Icons.phone_android_rounded,
@@ -189,16 +200,16 @@ class _EnrolFormState extends State<_EnrolForm> {
             validator: phoneValidator),
         SizedBox(height: Space.s3),
         LabeledField(
-            label: 'Temporary password',
+            label: tr('Temporary password'),
             controller: _password,
-            hint: 'At least 6 characters',
+            hint: tr('At least 6 characters'),
             icon: Icons.lock_outline_rounded,
             textInputAction: TextInputAction.done,
             validator: passwordValidator),
         SizedBox(height: Space.s4),
         FilledButton(
             onPressed: _busy ? null : _enrol,
-            child: Text(_busy ? 'Enrolling...' : 'Enrol and link')),
+            child: Text(_busy ? tr('Enrolling...') : tr('Enrol and link'))),
       ]),
     );
   }

@@ -9,11 +9,13 @@ import '../../theme/theme.dart';
 import '../../widgets/child_avatar.dart';
 import '../../widgets/common.dart';
 import '../../widgets/domain.dart';
+import '../../widgets/growth_chart.dart';
 import '../../widgets/journey_path.dart';
 import '../../widgets/risk_chip.dart';
 import 'caregiver_data.dart';
 import 'caregiver_shell.dart';
 import 'result_screen.dart';
+import '../../i18n/strings.dart';
 
 class ChildProfileScreen extends StatefulWidget {
   const ChildProfileScreen({super.key, required this.childId});
@@ -43,7 +45,7 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
     if (_future == null || _version != s.dataVersion) _load();
     final isCaregiver = s.user?.role == 'caregiver';
     return Scaffold(
-      appBar: AppBar(title: Text('Child profile')),
+      appBar: AppBar(title: Text(tr('Child profile'))),
       body: AsyncView<ChildWithChecks>(
         future: _future!,
         onRetry: () => setState(_load),
@@ -76,14 +78,14 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
                     style: TextButton.styleFrom(padding: EdgeInsets.zero),
                     onPressed: () => _changeAvatar(context, c),
                     icon: Icon(Icons.edit_outlined, size: 18),
-                    label: Text('Change animal'),
+                    label: Text(tr('Change animal')),
                   ),
               ]),
             ),
           ]),
           if (latest != null) ...[
             SizedBox(height: Space.s4),
-            Text('LATEST CHECK', style: t.labelMedium),
+            Text(tr('LATEST CHECK'), style: t.labelMedium),
             SizedBox(height: Space.s1),
             RiskChip.risk(latest.riskLevel),
             SizedBox(height: Space.s4),
@@ -98,7 +100,12 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(DomainStyle.of(context, d.domain).label,
                             style: t.bodySmall?.copyWith(color: context.hc.plum900)),
-                        Text(d.needsSupport ? 'Needs support' : 'On track',
+                        Text(
+                            d.notAssessed
+                                ? tr('From 24 months')
+                                : d.needsSupport
+                                    ? tr('Needs support')
+                                    : tr('On track'),
                             style: t.labelLarge?.copyWith(fontSize: 14)),
                       ]),
                     ),
@@ -118,20 +125,40 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
             Expanded(
               child: Text(
                 due.isAfter(DateTime.now())
-                    ? 'Next check: around ${df.format(due)}'
+                    ? tr('Next check: around {date}', {'date': df.format(due)})
                     : latest == null
-                        ? 'No checks yet. Start the first one now.'
-                        : 'A new check is due.',
+                        ? tr('No checks yet. Start the first one now.')
+                        : tr('A new check is due.'),
                 style: t.bodyMedium,
               ),
             ),
           ]),
         ),
+      SizedBox(height: Space.s3),
+      // Reasons for special care (Mother and Child Health Handbook), shown to the CHW.
+      HatuaCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(tr('Good for the health worker to know'), style: t.titleMedium)),
+            if (isCaregiver)
+              TextButton(
+                  onPressed: () => _editCareFactors(context, c), child: Text(tr('Edit'))),
+          ]),
+          if (c.careFactors.isEmpty)
+            Text(tr('Nothing ticked.'), style: t.bodySmall)
+          else
+            for (final f in c.careFactors)
+              Padding(
+                padding: EdgeInsets.only(top: Space.s1),
+                child: Text('•  ${careFactorLabels[f] ?? f}', style: t.bodyMedium),
+              ),
+        ]),
+      ),
       SizedBox(height: Space.s6),
       _GrowthSection(child: c, canAdd: isCaregiver),
       SizedBox(height: Space.s6),
-      Text("${c.firstName}'s journey", style: t.titleLarge),
-      Text('One step for each age, from birth to five.', style: t.bodySmall),
+      Text(tr("{firstName}'s journey", {'firstName': c.firstName}), style: t.titleLarge),
+      Text(tr('One step for each age, from birth to five.'), style: t.bodySmall),
       SizedBox(height: Space.s4),
       JourneyPath(
         ageMonths: c.ageMonths,
@@ -145,7 +172,7 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
         SizedBox(height: Space.s4),
         OutlinedButton(
           onPressed: () => startCheck(context, child: c),
-          child: Text('Start a new check'),
+          child: Text(tr('Start a new check')),
         ),
       ],
       SizedBox(height: Space.s6),
@@ -154,6 +181,46 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
 
   static bool _sameBand(int a, int b) =>
       ageBands.any((band) => a >= band.$1 && a <= band.$2 && b >= band.$1 && b <= band.$2);
+
+  Future<void> _editCareFactors(BuildContext context, Child child) async {
+    final session = context.read<Session>();
+    var picked = child.careFactors.toSet();
+    final result = await showModalBottomSheet<Set<String>>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(Space.s4),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(tr('Does any of this apply to {firstName}?', {'firstName': child.firstName}),
+                  style: Theme.of(ctx).textTheme.titleLarge),
+              SizedBox(height: Space.s2),
+              CareFactorChecks(
+                  selected: picked,
+                  labels: careFactorLabels,
+                  onChanged: (f) => setSheet(() => picked = f)),
+              SizedBox(height: Space.s4),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(picked), child: Text(tr('Save'))),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+    if (result == null) return;
+    try {
+      await session.api
+          .patch('/children/${child.childId}', {'care_factors': result.toList()});
+      session.dataChanged();
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+    }
+  }
 
   Future<void> _changeAvatar(BuildContext context, Child child) async {
     final session = context.read<Session>();
@@ -167,14 +234,14 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
           child: Padding(
             padding: EdgeInsets.all(Space.s4),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('Pick an animal', style: Theme.of(ctx).textTheme.titleLarge),
+              Text(tr('Pick an animal'), style: Theme.of(ctx).textTheme.titleLarge),
               SizedBox(height: Space.s4),
               AvatarPicker(selected: picked, onPick: (id) => setSheet(() => picked = id)),
               SizedBox(height: Space.s4),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                    onPressed: () => Navigator.of(ctx).pop(picked), child: Text('Save')),
+                    onPressed: () => Navigator.of(ctx).pop(picked), child: Text(tr('Save'))),
               ),
             ]),
           ),
@@ -205,20 +272,20 @@ class _GrowthSection extends StatelessWidget {
     String n(double? v, String unit) => v == null ? '-' : '${v.toStringAsFixed(1)} $unit';
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
-        Expanded(child: Text('Growth', style: t.titleLarge)),
+        Expanded(child: Text(tr('Growth'), style: t.titleLarge)),
         if (canAdd)
           TextButton.icon(
             onPressed: () => showDialog(
                 context: context, builder: (_) => _GrowthDialog(child: child)),
             icon: Icon(Icons.add_rounded),
-            label: Text('Add'),
+            label: Text(tr('Add')),
           ),
       ]),
       SizedBox(height: Space.s2),
       if (entries.isEmpty)
         HatuaCard(
           child: Text(
-              'No weight or height yet. Add them from the clinic booklet after a visit.',
+              tr('No weight or height yet. Add them from the clinic booklet after a visit.'),
               style: t.bodyMedium),
         )
       else ...[
@@ -226,17 +293,21 @@ class _GrowthSection extends StatelessWidget {
           Expanded(
               child: _Measure(
                   icon: Icons.monitor_weight_outlined,
-                  label: 'Weight',
+                  label: tr('Weight'),
                   value: n(entries.first.weightKg, 'kg'),
                   color: context.hc.sun100)),
           SizedBox(width: Space.s3),
           Expanded(
               child: _Measure(
                   icon: Icons.straighten_rounded,
-                  label: 'Height',
+                  label: tr('Height'),
                   value: n(entries.first.heightCm, 'cm'),
                   color: context.hc.sky100)),
         ]),
+        if (entries.any((e) => e.weightKg != null)) ...[
+          SizedBox(height: Space.s3),
+          HatuaCard(child: WeightChart(child: child)),
+        ],
         SizedBox(height: Space.s3),
         HatuaCard(
           padding: EdgeInsets.zero,
@@ -269,11 +340,11 @@ class _Measure extends StatelessWidget {
     return HatuaCard(
       color: color,
       child: Row(children: [
-        Icon(icon, color: context.hc.onBright),
+        Icon(icon, color: context.hc.plum900),
         SizedBox(width: Space.s2),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: t.bodySmall?.copyWith(color: context.hc.onBright)),
-          Text(value, style: t.titleMedium?.copyWith(color: context.hc.onBright)),
+          Text(label, style: t.bodySmall?.copyWith(color: context.hc.plum900)),
+          Text(value, style: t.titleMedium?.copyWith(color: context.hc.plum900)),
         ]),
       ]),
     );
@@ -306,14 +377,14 @@ class _GrowthDialogState extends State<_GrowthDialog> {
   String? _range(String? v, double lo, double hi) {
     if (v == null || v.trim().isEmpty) return null;
     final x = _num(v);
-    return (x == null || x < lo || x > hi) ? 'Between $lo and $hi' : null;
+    return (x == null || x < lo || x > hi) ? tr('Between {lo} and {hi}', {'lo': lo, 'hi': hi}) : null;
   }
 
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     final w = _num(_weight.text), h = _num(_height.text);
     if (w == null && h == null) {
-      showMessage(context, 'Enter a weight, a height or both.');
+      showMessage(context, tr('Enter a weight, a height or both.'));
       return;
     }
     setState(() => _busy = true);
@@ -333,19 +404,19 @@ class _GrowthDialogState extends State<_GrowthDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Add weight and height'),
+      title: Text(tr('Add weight and height')),
       content: Form(
         key: _form,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           LabeledField(
-            label: 'Weight (kg)',
+            label: tr('Weight (kg)'),
             controller: _weight,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             validator: (v) => _range(v, 1, 35),
           ),
           SizedBox(height: Space.s3),
           LabeledField(
-            label: 'Height or length (cm)',
+            label: tr('Height or length (cm)'),
             controller: _height,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             textInputAction: TextInputAction.done,
@@ -354,8 +425,8 @@ class _GrowthDialogState extends State<_GrowthDialog> {
         ]),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-        TextButton(onPressed: _busy ? null : _save, child: Text('Save')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel'))),
+        TextButton(onPressed: _busy ? null : _save, child: Text(tr('Save'))),
       ],
     );
   }

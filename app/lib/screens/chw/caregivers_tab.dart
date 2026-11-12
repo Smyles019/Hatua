@@ -11,6 +11,7 @@ import '../caregiver/add_child_screen.dart';
 import '../caregiver/child_profile_screen.dart';
 import 'chw_data.dart';
 import 'link_caregiver_screen.dart';
+import '../../i18n/strings.dart';
 
 /// Caregivers linked to this CHW, with their children.
 class CaregiversTab extends StatefulWidget {
@@ -36,7 +37,7 @@ class _CaregiversTabState extends State<CaregiversTab> {
     if (_future == null || _version != s.dataVersion) _load();
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: Text('Caregivers')),
+      appBar: AppBar(title: Text(tr('Caregivers'))),
       body: RefreshIndicator(
         color: context.hc.plum700,
         onRefresh: () async {
@@ -49,7 +50,7 @@ class _CaregiversTabState extends State<CaregiversTab> {
             onPressed: () => Navigator.of(context)
                 .push(MaterialPageRoute(builder: (_) => LinkCaregiverScreen())),
             icon: Icon(Icons.person_add_alt_1_outlined),
-            label: Text('Link or enrol a caregiver'),
+            label: Text(tr('Link or enrol a caregiver')),
           ),
           SizedBox(height: Space.s4),
           AsyncView<List<LinkedCaregiver>>(
@@ -58,8 +59,8 @@ class _CaregiversTabState extends State<CaregiversTab> {
             builder: (context, list) => Column(children: [
               if (list.isEmpty)
                 EmptyPanel(
-                  title: 'No caregivers linked yet',
-                  message: 'Link caregivers by phone number to see their children here.',
+                  title: tr('No caregivers linked yet'),
+                  message: tr('Link caregivers by phone number to see their children here.'),
                   icon: Icons.people_outline_rounded,
                 ),
               for (final c in list) ...[
@@ -119,7 +120,7 @@ class _CaregiversTabState extends State<CaregiversTab> {
                   else if (snap.hasError)
                     Text('${snap.error}', style: t.bodyMedium)
                   else ...[
-                    if (snap.data!.isEmpty) Text('No children added yet.', style: t.bodyMedium),
+                    if (snap.data!.isEmpty) Text(tr('No children added yet.'), style: t.bodyMedium),
                     for (final ch in snap.data!)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -142,7 +143,7 @@ class _CaregiversTabState extends State<CaregiversTab> {
                           builder: (_) => AddChildScreen(
                               caregiverId: c.user.userId, caregiverName: c.user.fullName)));
                     },
-                    child: Text('Add a child for this caregiver'),
+                    child: Text(tr('Add a child for this caregiver')),
                   ),
                 ],
               );

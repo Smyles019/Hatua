@@ -11,7 +11,10 @@ import '../../widgets/common.dart';
 import '../../widgets/google_button.dart';
 import '../../widgets/theme_toggle.dart';
 import 'add_phone_screen.dart';
+import 'check_email_screen.dart';
+import 'forgot_password_screen.dart';
 import 'sign_up_screen.dart';
+import '../../i18n/strings.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -22,14 +25,14 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final _form = GlobalKey<FormState>();
-  final _phone = TextEditingController();
+  final _email = TextEditingController();
   final _password = TextEditingController();
   bool _busy = false;
   bool _google = false;
 
   @override
   void dispose() {
-    _phone.dispose();
+    _email.dispose();
     _password.dispose();
     super.dispose();
   }
@@ -38,7 +41,13 @@ class _SignInScreenState extends State<SignInScreen> {
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
     try {
-      await context.read<Session>().signIn(_phone.text.trim(), _password.text);
+      await context.read<Session>().signIn(_email.text.trim(), _password.text);
+    } on NeedsVerification catch (e) {
+      // Right password, but the emailed confirmation link has not been opened yet.
+      if (mounted) {
+        await Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => CheckEmailScreen(email: e.email)));
+      }
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
@@ -83,7 +92,10 @@ class _SignInScreenState extends State<SignInScreen> {
             alignment: Alignment.topRight,
             child: Padding(
               padding: const EdgeInsets.all(Space.s2),
-              child: ThemeToggleButton(color: context.hc.onHeader),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                LanguageToggleButton(color: context.hc.onHeader),
+                ThemeToggleButton(color: context.hc.onHeader),
+              ]),
             ),
           ),
         ),
@@ -93,7 +105,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   Widget _body(BuildContext context) {
     return ListView(padding: EdgeInsets.zero, children: [
-      BlobHeader(title: 'Welcome back', subtitle: 'Sign in to continue.', variant: 1),
+      BlobHeader(title: tr('Welcome back'), subtitle: tr('Sign in to continue.'), variant: 1),
       Padding(
         padding: const EdgeInsets.all(Space.s4),
         child: Form(
@@ -101,26 +113,36 @@ class _SignInScreenState extends State<SignInScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const SizedBox(height: Space.s4),
             LabeledField(
-              label: 'Phone number',
-              controller: _phone,
-              hint: '0712 345 678',
-              icon: Icons.phone_android_rounded,
-              keyboardType: TextInputType.phone,
-              validator: phoneValidator,
+              label: tr('Email'),
+              controller: _email,
+              hint: 'amina@example.com',
+              icon: Icons.mail_outline_rounded,
+              keyboardType: TextInputType.emailAddress,
+              validator: emailValidator,
             ),
             const SizedBox(height: Space.s3),
             LabeledField(
-              label: 'Password',
+              label: tr('Password'),
               controller: _password,
               icon: Icons.lock_outline_rounded,
               obscure: true,
               textInputAction: TextInputAction.done,
-              validator: (v) => requiredField(v, 'your password'),
+              validator: (v) => requiredField(v, tr('your password')),
             ),
-            const SizedBox(height: Space.s6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _busy
+                    ? null
+                    : () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ForgotPasswordScreen(email: _email.text.trim()))),
+                child: Text(tr('Forgot password?')),
+              ),
+            ),
+            const SizedBox(height: Space.s3),
             FilledButton(
               onPressed: _busy || _google ? null : _submit,
-              child: Text(_busy ? 'Signing in...' : 'Sign in'),
+              child: Text(_busy ? tr('Signing in...') : tr('Sign in')),
             ),
             // Google sign-in is phone-only for now: the web needs Google's own button.
             if (!kIsWeb) ...[
@@ -142,14 +164,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   ? null
                   : () => Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => const SignUpScreen())),
-              child: const Text('New here? Create an account'),
-            ),
-            const SizedBox(height: Space.s4),
-            Text(
-              'Health workers and administrators: use the account your administrator '
-              'gave you.',
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
+              child: Text(tr('New here? Create an account')),
             ),
           ]),
         ),

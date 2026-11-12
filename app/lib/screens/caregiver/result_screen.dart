@@ -9,7 +9,9 @@ import '../../widgets/common.dart';
 import '../../widgets/domain.dart';
 import '../../widgets/risk_chip.dart';
 import '../../widgets/sprout.dart';
+import '../messages/thread_screen.dart';
 import 'play_ideas.dart';
+import '../../i18n/strings.dart';
 
 /// Caregiver results: overall level, one card per domain, and things to try, built from
 /// the top reasons the model gave. Worded as actions, never as a diagnosis.
@@ -19,21 +21,26 @@ class ResultScreen extends StatelessWidget {
   final bool justSubmitted;
 
   String get _headline => switch (assessment.riskLevel) {
-        'high' => "Let's get ${assessment.childName} checked by a health worker",
-        'medium' => "Let's keep an eye on ${assessment.childName}",
-        _ => '${assessment.childName} is on track',
+        'high' => tr("Let's get {childName} checked by a health worker", {'childName': assessment.childName}),
+        'medium' => tr("Let's keep an eye on {childName}", {'childName': assessment.childName}),
+        _ => tr('{childName} is on track', {'childName': assessment.childName}),
       };
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final a = assessment;
-    final domains = [...a.domains]
+    // Kinds of flag raised by answers (hearing, vision), as apart from growth.
+    final screening = a.redFlags.map((f) => f.kind).where((k) => k != 'growth').toSet();
+    // Areas not checked at this age (under 24 months) get a note, not a card.
+    final domains = a.domains.where((d) => !d.notAssessed).toList()
       ..sort((x, y) => (y.needsSupport ? 1 : 0) - (x.needsSupport ? 1 : 0));
+    final notChecked =
+        notCheckedNote(context, a.domains.where((d) => d.notAssessed).map((d) => d.domain));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(justSubmitted ? 'Results' : 'Check from ${DateFormat('d MMM yyyy').format(a.submittedAt)}'),
+        title: Text(justSubmitted ? tr('Results') : tr('Check from {date}', {'date': DateFormat('d MMM yyyy').format(a.submittedAt)})),
         automaticallyImplyLeading: !justSubmitted,
       ),
       body: ListView(padding: EdgeInsets.all(Space.s4), children: [
@@ -49,8 +56,8 @@ class ResultScreen extends StatelessWidget {
               padding: EdgeInsets.symmetric(horizontal: Space.s3, vertical: Space.s1),
               decoration: BoxDecoration(
                   color: context.hc.sun100, borderRadius: BorderRadius.circular(999)),
-              child: Text(justSubmitted ? 'CHECK COMPLETE' : 'PAST CHECK',
-                  style: t.labelMedium?.copyWith(color: context.hc.onBright)),
+              child: Text(justSubmitted ? tr('CHECK COMPLETE') : tr('PAST CHECK'),
+                  style: t.labelMedium?.copyWith(color: context.hc.plum900)),
             ),
             SizedBox(height: Space.s3),
             Text(_headline, style: t.headlineSmall, textAlign: TextAlign.center),
@@ -73,13 +80,17 @@ class ResultScreen extends StatelessWidget {
                   ]),
                 ),
                 Text(
-                    '${a.domains.where((d) => !d.needsSupport).length} of ${a.domains.length} on track',
+                    tr('{n} of {total} on track', {'n': domains.where((d) => !d.needsSupport).length, 'total': domains.length}),
                     style: t.bodySmall),
               ]),
             ),
             if (a.method == 'milestone_check') ...[
               SizedBox(height: Space.s3),
-              Text('At this age the check looks at movement only.', style: t.bodySmall),
+              Text(tr('At this age the check looks at movement only.'), style: t.bodySmall),
+            ],
+            if (notChecked != null) ...[
+              SizedBox(height: Space.s3),
+              Text(notChecked, style: t.bodySmall, textAlign: TextAlign.center),
             ],
           ]),
         ),
@@ -102,10 +113,46 @@ class ResultScreen extends StatelessWidget {
               SizedBox(width: Space.s3),
               Expanded(
                 child: Text(
-                    'Your community health worker will look at this result and may get in '
-                    'touch with you.',
+                    tr('Your community health worker will look at this result and may get in touch with you.'),
                     style: t.bodyMedium),
               ),
+            ]),
+          ),
+        ],
+        // Hearing, eye and growth flags. Rules, not part of the result above.
+        if (a.redFlags.isNotEmpty) ...[
+          SizedBox(height: Space.s4),
+          HatuaCard(
+            color: context.hc.riskMediumBg,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(Icons.visibility_outlined, color: context.hc.plum900),
+                SizedBox(width: Space.s3),
+                Expanded(
+                    child: Text(
+                        tr('{kinds}: worth a check', {'kinds': a.redFlags.map((f) => f.kindLabel).toSet().join(tr(' and '))}),
+                        style: t.titleMedium)),
+              ]),
+              // Hearing and eye flags come from answers; growth flags from the weight and
+              // height entered (WHO standard). Each gets its own sentence.
+              if (screening.isNotEmpty) ...[
+                SizedBox(height: Space.s2),
+                Text(
+                    tr(screening.length > 1
+                            ? "From your answers, {name}'s hearing and eyes should be looked at by a health worker. This is separate from the result above and is not a diagnosis."
+                            : screening.contains('hearing')
+                                ? "From your answers, {name}'s hearing should be looked at by a health worker. This is separate from the result above and is not a diagnosis."
+                                : "From your answers, {name}'s eyes should be looked at by a health worker. This is separate from the result above and is not a diagnosis.",
+                        {'name': a.childName}),
+                    style: t.bodyMedium),
+              ],
+              if (a.redFlags.any((f) => f.kind == 'growth')) ...[
+                SizedBox(height: Space.s2),
+                Text(
+                    tr("From the weight and height you entered, {name}'s growth should be checked by a health worker. This is separate from the result above and is not a diagnosis.",
+                        {'name': a.childName}),
+                    style: t.bodyMedium),
+              ],
             ]),
           ),
         ],
@@ -125,7 +172,7 @@ class ResultScreen extends StatelessWidget {
             SizedBox(width: Space.s3),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('SUGGESTED PLAY', style: t.labelMedium),
+                Text(tr('SUGGESTED PLAY'), style: t.labelMedium),
                 SizedBox(height: Space.s1),
                 Text(playIdeaFor(a.ageMonths).title, style: t.titleMedium),
                 SizedBox(height: Space.s1),
@@ -137,14 +184,21 @@ class ResultScreen extends StatelessWidget {
         ),
         SizedBox(height: Space.s4),
         Text(
-          'This check gives a signal, not a diagnosis. If you are worried about your child, '
-          'visit a health facility.',
+          tr('This check gives a signal, not a diagnosis. If you are worried about your child, visit a health facility.'),
           style: t.bodySmall,
         ),
         SizedBox(height: Space.s4),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) =>
+                  ThreadScreen(predictionId: a.predictionId, aboutChild: a.childName))),
+          icon: Icon(Icons.chat_bubble_outline_rounded),
+          label: Text(tr('Ask your health worker about this')),
+        ),
+        SizedBox(height: Space.s2),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(justSubmitted ? 'Back to home' : 'Done'),
+          child: Text(justSubmitted ? tr('Back to home') : tr('Done')),
         ),
       ]),
     );
@@ -155,9 +209,13 @@ class ResultScreen extends StatelessWidget {
 /// ecd40) are not skills to practise, so they point to a conversation instead.
 String _tip(Reason r) {
   if (r.item.endsWith('39') || r.item.endsWith('40')) {
-    return 'Talk with your health worker about ${r.question}.';
+    return tr('Talk with your health worker about {question}.', {'question': r.question});
   }
-  return 'Practise ${r.question} together in everyday play.';
+  // Movement is one area, but say whether it is big movements or hand skills.
+  final kind = r.domain == 'motor' ? motorKindOfItem(r.item) : null;
+  final prefix = kind == null ? '' : '${motorKindLabel(kind)}: ';
+  final tip = tr('practise {question} together in everyday play.', {'question': r.question});
+  return prefix.isEmpty ? '${tip[0].toUpperCase()}${tip.substring(1)}' : '$prefix$tip';
 }
 
 class _DomainCard extends StatelessWidget {
@@ -181,7 +239,7 @@ class _DomainCard extends StatelessWidget {
         RiskChip.domain(domain.needsSupport),
         if (domain.needsSupport && reasons.isNotEmpty) ...[
           SizedBox(height: Space.s3),
-          Text('Things to try this month:', style: t.labelLarge),
+          Text(tr('Things to try this month:'), style: t.labelLarge),
           SizedBox(height: Space.s1),
           for (final r in reasons)
             Padding(
@@ -194,7 +252,7 @@ class _DomainCard extends StatelessWidget {
             ),
         ] else if (!domain.needsSupport) ...[
           SizedBox(height: Space.s2),
-          Text('Keep playing and talking together every day.', style: t.bodyMedium),
+          Text(tr('Keep playing and talking together every day.'), style: t.bodyMedium),
         ],
       ]),
     );
