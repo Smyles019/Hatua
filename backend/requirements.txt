@@ -4,7 +4,22 @@ sqlalchemy>=2.0
 psycopg[binary]>=3.1
 alembic>=1.13
 pydantic-settings>=2.2
-passlib[bcrypt]>=1.7
-python-jose[cryptography]>=3.3
+pyjwt>=2.8             # access tokens (HS256)
+python-multipart>=0.0.9  # form sign-in behind the Authorize button in /docs
+google-auth>=2.29        # verifies Google sign-in ID tokens (app/core/google.py)
+requests>=2.31           # transport google-auth uses to fetch Google's signing keys
 pytest
 httpx
+
+# Model inference: hatua_ml from this repo, and the library versions the release was
+# built with (ml/artefacts/release/<version>/manifest.json). Loading a pickled model with
+# different versions can fail or change results.
+-e ../ml
+xgboost==3.4.1
+scikit-learn==1.9.1
+pyod==3.6.6
+shap==0.52.0
+pandas==3.0.6
+joblib==1.6.0
+pyreadstat>=1.2   # imported by hatua_ml.data loaders; not used at runtime
+pyreadr>=0.5

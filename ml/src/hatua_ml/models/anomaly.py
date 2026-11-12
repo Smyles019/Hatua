@@ -5,7 +5,6 @@ children are never removed on the basis of these scores.
 """
 import numpy as np
 import pandas as pd
-from pyod.models.dif import DIF
 from pyod.models.iforest import IForest
 from sklearn.linear_model import LogisticRegression
 
@@ -21,9 +20,17 @@ AGE_MIN, AGE_MAX = 24.0, 59.0
 # Share of real training children allowed above the flag line. A starting point.
 FLAG_RATE = 0.05
 
+
+def _dif(**kwargs):
+    # Imported here, not at the top: DIF needs torch, and the API only loads the
+    # shipped Isolation Forest flagger, so it should not have to install torch.
+    from pyod.models.dif import DIF
+    return DIF(random_state=SEED, **kwargs)
+
+
 DETECTORS = {
-    "dif": lambda: DIF(random_state=SEED),  # Deep Isolation Forest (proposal)
-    "dif_small": lambda: DIF(hidden_neurons=[32], representation_dim=8, random_state=SEED),
+    "dif": lambda: _dif(),  # Deep Isolation Forest (proposal)
+    "dif_small": lambda: _dif(hidden_neurons=[32], representation_dim=8),
     "iforest": lambda: IForest(random_state=SEED),  # plain Isolation Forest
 }
 
