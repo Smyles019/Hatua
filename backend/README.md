@@ -72,14 +72,22 @@ Someone else's child or case answers 404, not 403, so ids cannot be used to prob
 
 | Child's age | Method | Questions | Result |
 |---|---|---|---|
-| 0 to 3 months | none | | refused with a message to check from 4 months |
-| 4 to 23 months | WHO motor milestone check (rule-based) | up to 6, by age | movement only; overdue milestones as reasons |
-| 24 to 59 months | XGBoost release, Isolation Forest flag, SHAP domains | the 13-question short form | four domains, top 3 reasons |
+| 0 to 23 months | Under-24 XGBoost model (`UNDER2_MODEL_DIR`), odd-answer check, SHAP | 2 to 15, chosen by the child's month from the 30-question short form | movement and language with top 3 reasons; thinking and social areas `not_assessed` |
+| 24 to 59 months | XGBoost release (`MODEL_RELEASE`), Isolation Forest flag, SHAP domains | the 13-question short form | four domains, top 3 reasons |
 
-Risk levels for the model: below the screening cut-off is low; between the screening and
+If the under-24 model folder is missing, 4 to 23 months use the WHO motor milestone check
+(rule-based, up to 6 movement questions, overdue milestones as reasons) and 0 to 3 months
+are refused with a message to check from 4 months.
+
+Under 24 months the app does not ask for gestational age yet, so the model assumes a
+full-term birth (40 weeks); results record this as `gest_weeks_assumed`. "Don't know" is
+left blank for this model, which reads blank as "not asked".
+
+Risk levels for the models: below the screening cut-off is low; between the screening and
 high-risk cut-offs is medium; at or above the high-risk cut-off is high. For the milestone
 check: no overdue milestone is low, one is medium, two or more is high. Medium, high and
-flagged results go to the linked CHW.
+flagged results go to the linked CHW. A `not_assessed` domain never overwrites an earlier
+result in the child's milestone summary.
 
 ## Database
 

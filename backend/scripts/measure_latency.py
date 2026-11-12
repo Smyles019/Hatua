@@ -5,9 +5,9 @@ Run against a running server (uvicorn app.main:app, from backend/):
     python scripts/measure_latency.py                      # 50 rounds, http://127.0.0.1:8000
     python scripts/measure_latency.py --runs 200 --base http://127.0.0.1:8000
 
-It registers a throwaway caregiver, adds a 40-month-old (model path) and an
-18-month-old (milestone check), then times, for each round: fetching the questions
-and submitting the answers. Results go to docs/testing/latency_<date>.csv and a
+It registers a throwaway caregiver, adds a 40-month-old (24-59 model) and an 18- and a
+9-month-old (under-24 model, or the WHO motor check if that model is not loaded), then
+times, for each round: fetching the questions and submitting the answers. Results go to docs/testing/latency_<date>.csv and a
 summary is printed and written to docs/testing/latency_<date>.md.
 
 What it measures: the full round trip on this machine, so server work (validation,
@@ -36,6 +36,17 @@ NETWORKS = {"Slow 3G": (400, 400, 2000), "Fast 3G": (1600, 750, 562)}
 
 GOOD = {"yes", "few_times_year", "never", "not_at_all", "same_or_less"}
 
+# One child per path: 40 months (24-59 model), 18 and 9 months (under-24 model, or the
+# WHO motor check when that model is not loaded).
+CHILDREN = (("Older", 40), ("Toddler", 18), ("Baby", 9))
+
+
+def path_name(method: str, age_months: int) -> str:
+    """Results are grouped by path, since both models report method "model"."""
+    if method == "milestone_check":
+        return "WHO motor check"
+    return "under-24 model" if age_months < 24 else "24-59 model"
+
 
 def months_ago(n: int) -> str:
     t = date.today()
@@ -45,12 +56,17 @@ def months_ago(n: int) -> str:
 
 def setup(c: httpx.Client) -> tuple[dict, list[str]]:
     phone = "07" + "".join(random.choices("0123456789", k=8))
-    r = c.post("/auth/register", json={"full_name": "Latency test", "phone_number": phone,
-                                       "password": "latency-test"})
+    email = f"latency-{phone}@hatua.test"
+    r = c.post("/auth/register", json={"full_name": "Latency test", "email": email,
+                                       "phone_number": phone, "password": "latency-test"})
+    r.raise_for_status()
+    # Development helper (DEV_MODE=true): confirm the email without opening the link.
+    c.post("/dev/verify-email", json={"email": email}).raise_for_status()
+    r = c.post("/auth/login", json={"email": email, "password": "latency-test"})
     r.raise_for_status()
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
     kids = []
-    for name, months in (("Model", 40), ("Motor", 18)):
+    for name, months in CHILDREN:
         r = c.post("/children", headers=headers, json={
             "first_name": name, "date_of_birth": months_ago(months), "sex": "female",
             "location": "Latency test"})
@@ -75,7 +91,9 @@ def one_round(c: httpx.Client, headers: dict, child: str) -> dict:
                content=payload)
     t3 = time.perf_counter()
     s.raise_for_status()
-    return {"method": body["method"], "questions_s": t1 - t0, "submit_s": t3 - t2,
+    return {"path": path_name(body["method"], body["age_months"]),
+            "model_version": body["model_version"], "n_questions": len(body["questions"]),
+            "questions_s": t1 - t0, "submit_s": t3 - t2,
             "questions_bytes": len(q.content), "request_bytes": len(payload),
             "result_bytes": len(s.content), "risk_level": s.json()["risk_level"]}
 
@@ -88,14 +106,15 @@ def summarise(rows: list[dict]) -> str:
     lines = [f"# API response time ({date.today().isoformat()})", "",
              f"{len(rows)} assessments against a local server. Times are full round trips on "
              "the test machine (server work plus local HTTP), in seconds.", "",
-             "| Path | Step | Median | 95th percentile | Max |", "|---|---|---|---|---|"]
-    for method in sorted({r["method"] for r in rows}):
-        sub = [r for r in rows if r["method"] == method]
+             "| Path | Model version | Step | Median | 95th percentile | Max |",
+             "|---|---|---|---|---|---|"]
+    for path in sorted({r["path"] for r in rows}):
+        sub = [r for r in rows if r["path"] == path]
         for step in ("questions_s", "submit_s"):
             v = sorted(r[step] for r in sub)
             p95 = v[min(len(v) - 1, int(round(0.95 * (len(v) - 1))))]
-            lines.append(f"| {method} | {step[:-2]} | {statistics.median(v):.3f} | {p95:.3f} | "
-                         f"{max(v):.3f} |")
+            lines.append(f"| {path} | {sub[0]['model_version']} | {step[:-2]} | "
+                         f"{statistics.median(v):.3f} | {p95:.3f} | {max(v):.3f} |")
     size = {k: statistics.median(r[k] for r in rows)
             for k in ("questions_bytes", "request_bytes", "result_bytes")}
     lines += ["", "Median sizes: questions response {questions_bytes:.0f} B, answers sent "
@@ -126,7 +145,7 @@ def main():
         headers, kids = setup(c)
         for child in kids:  # warm up: first call loads the model release
             one_round(c, headers, child)
-        rows = [one_round(c, headers, kids[i % 2]) for i in range(args.runs)]
+        rows = [one_round(c, headers, kids[i % len(kids)]) for i in range(args.runs)]
 
     OUT.mkdir(parents=True, exist_ok=True)
     stem = OUT / f"latency_{date.today().isoformat()}"

@@ -9,6 +9,15 @@ Sex = Literal["male", "female"]
 # Same list as app.db.models.AVATARS and the app's assets/avatars.
 Avatar = Literal["lion", "elephant", "giraffe", "zebra", "hippo", "monkey", "cheetah", "rhino"]
 Outcome = Literal["refer_to_facility", "reviewed_not_concerning", "unreachable"]
+# Same list as app.db.models.CARE_FACTORS.
+CareFactor = Literal["low_birth_weight", "multiple_birth", "short_birth_spacing"]
+
+
+class MessageIn(BaseModel):
+    """A caregiver's question, or a CHW's reply. prediction_id is only used on a
+    caregiver's question asked from a result screen."""
+    body: str = Field(min_length=1, max_length=1000)
+    prediction_id: uuid.UUID | None = None
 
 
 class ChildCreate(BaseModel):
@@ -19,6 +28,7 @@ class ChildCreate(BaseModel):
     sex: Sex
     location: str = Field(min_length=1, max_length=100)
     avatar_id: Avatar | None = None
+    care_factors: list[CareFactor] = []
 
 
 class GrowthEntry(BaseModel):
@@ -35,7 +45,9 @@ class GrowthEntry(BaseModel):
 
 
 class ChildUpdate(BaseModel):
-    avatar_id: Avatar
+    """Only the fields that are sent are changed."""
+    avatar_id: Avatar | None = None
+    care_factors: list[CareFactor] | None = None
 
 
 class ChildOut(BaseModel):
@@ -49,6 +61,7 @@ class ChildOut(BaseModel):
     age_months: int
     avatar_id: Avatar | None = None
     growth: list[GrowthEntry] = []
+    care_factors: list[CareFactor] = []
 
 
 class AssessmentIn(BaseModel):
@@ -71,6 +84,8 @@ class AssessmentOut(BaseModel):
     risk_level: Literal["low", "medium", "high"]
     anomaly_flag: bool
     sent_to_chw: bool
+    # Hearing and vision screening answers that need a look: [{flag, kind, kind_label, label}]
+    red_flags: list[dict] = []
     domains: list[dict]
     top_reasons: list[dict]
     model: dict

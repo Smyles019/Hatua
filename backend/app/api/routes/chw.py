@@ -11,21 +11,23 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require
-from app.api.routes.auth import add_user
+from app.api.routes.auth import add_user, send_verification
 from app.db.models import CaregiverInput, Child, PredictionResult, User
 from app.db.session import get_db
 from app.schemas.assessment import OutcomeIn
 from app.schemas.users import EnrolCaregiver, LinkByPhone, UserOut
-from app.services.results import to_out
+from app.services.results import needs_chw, to_out
 
 router = APIRouter()
 chw_only = require("chw")
 
 
 def routed():
-    """Results that go to a CHW: medium or high risk, or an anomaly flag."""
+    """Results that go to a CHW: medium or high risk, an anomaly flag, or a hearing or
+    vision red flag."""
     return or_(PredictionResult.risk_level.in_(("medium", "high")),
-               PredictionResult.anomaly_flag.is_(True))
+               PredictionResult.anomaly_flag.is_(True),
+               func.jsonb_array_length(PredictionResult.red_flags) > 0)
 
 
 @router.get("/caregivers")
@@ -51,9 +53,14 @@ def my_caregivers(user: User = Depends(chw_only), db: Session = Depends(get_db))
 @router.post("/caregivers", response_model=UserOut, status_code=201)
 def enrol_caregiver(body: EnrolCaregiver, user: User = Depends(chw_only),
                     db: Session = Depends(get_db)):
-    """Create a caregiver account during a household visit, already linked to this CHW."""
-    return add_user(db, full_name=body.full_name, phone_number=body.phone_number,
-                    password=body.password, role="caregiver", linked_chw_id=user.user_id)
+    """Create a caregiver account during a household visit, already linked to this CHW.
+    The caregiver confirms their email from the link sent here before the first sign-in,
+    the same as anyone who registers, so a mistyped address is caught at once."""
+    new = add_user(db, full_name=body.full_name, email=body.email,
+                   phone_number=body.phone_number, password=body.password, role="caregiver",
+                   linked_chw_id=user.user_id)
+    send_verification(new)
+    return new
 
 
 @router.post("/caregivers/link", response_model=UserOut)
@@ -83,11 +90,15 @@ def cases(include_reviewed: bool = False, user: User = Depends(chw_only),
         q = q.where(PredictionResult.chw_outcome.is_(None))
     out = []
     for p, i, c, caregiver in db.execute(q):
-        row = to_out(p, i, c)
+        row = to_out(p, i, c, user.language)
         row["caregiver"] = {"user_id": caregiver.user_id, "full_name": caregiver.full_name,
                             "phone_number": caregiver.phone_number}
         row["location"] = c.location
         row["answers"] = i.responses["answers"]
+        # Context from the child's profile: reasons for special care and the latest
+        # weight and height entry.
+        row["care_factors"] = c.care_factors or []
+        row["latest_growth"] = (c.growth or [None])[-1]
         out.append(row)
     return out
 
@@ -103,10 +114,10 @@ def record_outcome(prediction_id: uuid.UUID, body: OutcomeIn, user: User = Depen
     if row is None or row[3].linked_chw_id != user.user_id:
         raise HTTPException(404, "case not found")  # same answer for someone else's case
     pred, inp, child, _ = row
-    if not (pred.risk_level in ("medium", "high") or pred.anomaly_flag):
+    if not needs_chw(pred.risk_level, pred.anomaly_flag, pred.red_flags):
         raise HTTPException(409, "low-risk results without a flag are not CHW cases")
     pred.chw_outcome = body.outcome
     pred.reviewed_by = user.user_id
     pred.reviewed_at = datetime.now(timezone.utc)
     db.commit()
-    return to_out(pred, inp, child)
+    return to_out(pred, inp, child, user.language)

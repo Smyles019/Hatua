@@ -6,7 +6,7 @@ import pytest
 
 from app.api.routes import auth as auth_routes
 from app.core.google import GoogleIdentity, GoogleTokenError
-from conftest import PASSWORD, auth, new_phone
+from conftest import PASSWORD, auth, confirm_email, new_phone, register_caregiver
 
 TOKEN = "x" * 40
 
@@ -46,17 +46,43 @@ def test_returning_google_account_signs_straight_in(client, google):
 
 
 def test_phone_that_already_has_an_account_is_not_taken_over(client, google):
-    phone = new_phone()
-    client.post("/auth/register", json={"full_name": "A", "phone_number": phone,
-                                        "password": PASSWORD})
-    r = client.post("/auth/google", json={"id_token": TOKEN, "phone_number": phone})
+    user, _ = register_caregiver(client)  # another person, another email
+    r = client.post("/auth/google", json={"id_token": TOKEN,
+                                          "phone_number": user["phone_number"]})
     assert r.status_code == 409
 
 
-def test_google_only_account_cannot_sign_in_with_a_password(client, google):
+def test_google_email_that_already_has_an_account_signs_in_to_it(client, google):
+    """Same address, two ways in: the email account and the Google account are one."""
     phone = new_phone()
-    client.post("/auth/google", json={"id_token": TOKEN, "phone_number": phone})
-    r = client.post("/auth/login", json={"phone_number": phone, "password": "anything"})
+    client.post("/auth/register", json={"full_name": "Amina", "email": google.email,
+                                        "phone_number": phone, "password": PASSWORD})
+    confirm_email(client, google.email)
+    mine = client.post("/auth/login", json={"email": google.email, "password": PASSWORD})
+    assert mine.status_code == 200
+
+    r = client.post("/auth/google", json={"id_token": TOKEN})  # no phone step
+    assert r.status_code == 200
+    assert r.json()["user"]["user_id"] == mine.json()["user"]["user_id"]
+    # the password still works, and so does Google next time
+    assert client.post("/auth/login", json={"email": google.email,
+                                            "password": PASSWORD}).status_code == 200
+    assert client.post("/auth/google", json={"id_token": TOKEN}).status_code == 200
+
+
+def test_google_takes_over_an_unconfirmed_account_and_drops_its_password(client, google):
+    """Someone else may have registered the address. Google proves who owns it."""
+    client.post("/auth/register", json={"full_name": "Not Amina", "email": google.email,
+                                        "phone_number": new_phone(), "password": PASSWORD})
+    r = client.post("/auth/google", json={"id_token": TOKEN})
+    assert r.status_code == 200 and r.json()["user"]["email_verified"] is True
+    assert client.post("/auth/login", json={"email": google.email,
+                                            "password": PASSWORD}).status_code == 401
+
+
+def test_google_only_account_cannot_sign_in_with_a_password(client, google):
+    client.post("/auth/google", json={"id_token": TOKEN, "phone_number": new_phone()})
+    r = client.post("/auth/login", json={"email": google.email, "password": "anything"})
     assert r.status_code == 401
 
 
@@ -73,3 +99,12 @@ def test_google_sign_in_is_off_without_a_client_id(client, monkeypatch):
     monkeypatch.setattr(config.settings, "google_client_ids", "")
     r = client.post("/auth/google", json={"id_token": TOKEN})
     assert r.status_code == 401
+
+
+def test_sign_in_config_gives_the_website_its_google_client_id(client, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "google_client_ids", "web-id.apps.googleusercontent.com, other")
+    assert client.get("/auth/config").json() == {
+        "google_client_id": "web-id.apps.googleusercontent.com"}
+    monkeypatch.setattr(config.settings, "google_client_ids", "")
+    assert client.get("/auth/config").json() == {"google_client_id": None}

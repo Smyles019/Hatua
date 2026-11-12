@@ -15,7 +15,7 @@ from app.api.deps import current_user, get_child
 from app.db.models import CaregiverInput, Child, MilestoneSummary, PredictionResult, User
 from app.db.session import get_db
 from app.schemas.assessment import AssessmentOut, ChildCreate, ChildOut, ChildUpdate, GrowthEntry
-from app.services.results import DOMAIN_LABELS, age_in_months, to_out
+from app.services.results import age_in_months, domain_label, to_out
 
 router = APIRouter()
 
@@ -23,7 +23,7 @@ router = APIRouter()
 def child_out(c: Child) -> dict:
     return {**{k: getattr(c, k) for k in ("child_id", "caregiver_id", "first_name",
                                            "date_of_birth", "sex", "location", "avatar_id")},
-            "growth": c.growth or [],
+            "growth": c.growth or [], "care_factors": c.care_factors or [],
             "age_months": age_in_months(c.date_of_birth)}
 
 
@@ -49,7 +49,8 @@ def create_child(body: ChildCreate, user: User = Depends(current_user),
         raise HTTPException(422, "date of birth is in the future")
     if age > 59:
         raise HTTPException(422, "child must be under five (0 to 59 months)")
-    child = Child(**body.model_dump(exclude={"caregiver_id"}), caregiver_id=caregiver.user_id)
+    child = Child(**body.model_dump(exclude={"caregiver_id", "care_factors"}),
+                  care_factors=sorted(set(body.care_factors)), caregiver_id=caregiver.user_id)
     db.add(child)
     db.commit()
     return child_out(child)
@@ -77,10 +78,13 @@ def get_one(child_id: uuid.UUID, user: User = Depends(current_user), db: Session
 @router.patch("/{child_id}", response_model=ChildOut)
 def update_child(child_id: uuid.UUID, body: ChildUpdate, user: User = Depends(current_user),
                  db: Session = Depends(get_db)):
-    """Change the child's animal avatar."""
+    """Change the child's animal avatar or the ticked reasons for special care."""
     # Anyone who may view the child may edit these: caregiver, linked CHW, admin.
     child = get_child(child_id, user, db)
-    child.avatar_id = body.avatar_id
+    if body.avatar_id is not None:
+        child.avatar_id = body.avatar_id
+    if body.care_factors is not None:
+        child.care_factors = sorted(set(body.care_factors))
     db.commit()
     return child_out(child)
 
@@ -110,7 +114,7 @@ def child_history(child_id: uuid.UUID, user: User = Depends(current_user),
                       .join(CaregiverInput, PredictionResult.input_id == CaregiverInput.input_id)
                       .where(CaregiverInput.child_id == child.child_id)
                       .order_by(CaregiverInput.submitted_at.desc())).all()
-    return [to_out(p, i, child) for p, i in rows]
+    return [to_out(p, i, child, user.language) for p, i in rows]
 
 
 @router.get("/{child_id}/milestones")
@@ -127,7 +131,7 @@ def milestones(child_id: uuid.UUID, user: User = Depends(current_user),
                          .where(CaregiverInput.child_id == child.child_id)
                          .order_by(CaregiverInput.submitted_at)).all()
     return {"child_id": child.child_id,
-            "domains": [{"domain": d, "label": DOMAIN_LABELS[d], "status": st}
+            "domains": [{"domain": d, "label": domain_label(d, user.language), "status": st}
                         for d, st in s.domain_status.items()],
             "domain_status": s.domain_status, "updated_at": s.updated_at,
             "history": [{"submitted_at": t, "age_months": a, "risk_level": r}

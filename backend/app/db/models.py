@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer,
-                        MetaData, String, func, text, true)
+                        MetaData, String, false, func, text, true)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -17,6 +17,10 @@ SEXES = ("male", "female")
 RISK_LEVELS = ("low", "medium", "high")
 CHW_OUTCOMES = ("refer_to_facility", "reviewed_not_concerning", "unreachable")
 AVATARS = ("lion", "elephant", "giraffe", "zebra", "hippo", "monkey", "cheetah", "rhino")
+LANGUAGES = ("en", "sw")
+# "Reasons for special care" borrowed from the MOH Mother and Child Health Handbook.
+# Only the ones a caregiver can tick without sharing sensitive family details.
+CARE_FACTORS = ("low_birth_weight", "multiple_birth", "short_birth_spacing")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -46,6 +50,7 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint(_in("role", ROLES), name="role_valid"),
+        CheckConstraint(_in("language", LANGUAGES), name="language_valid"),
         # every account has a way to sign in: a Hatua password, a Google account, or both
         CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL",
                         name="has_sign_in"),
@@ -55,8 +60,15 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(100))
     phone_number: Mapped[str] = mapped_column(String(15), unique=True)
     password_hash: Mapped[str | None] = mapped_column(String(255))
-    # Google sign-in (caregivers only). google_id is Google's stable "sub" claim.
+    # People sign in with their email (and a password, or Google). The phone number is
+    # a contact detail and how CHWs find a caregiver to link. Nullable only for accounts
+    # made before email sign-in; every new account has one.
     email: Mapped[str | None] = mapped_column(String(254), unique=True)
+    # True once the person opened the emailed link, signed in with Google (Google has
+    # verified the address), or the account was created by an administrator or CHW.
+    email_verified: Mapped[bool] = mapped_column(Boolean, server_default=false(),
+                                                 default=False)
+    # Google sign-in. google_id is Google's stable "sub" claim.
     google_id: Mapped[str | None] = mapped_column(String(64), unique=True)
     role: Mapped[str] = mapped_column(String(20))
     linked_chw_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -64,6 +76,9 @@ class User(Base):
     # Deactivated accounts cannot sign in. Used instead of deleting, so recorded CHW
     # outcomes keep their reviewer (see PredictionResult.reviewed_by).
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
+    # App language: English or Swahili. Saved on the account so it follows the person
+    # from the phone to the web.
+    language: Mapped[str] = mapped_column(String(2), server_default="en", default="en")
     created_at: Mapped[datetime] = _now()
 
 
@@ -88,6 +103,10 @@ class Child(Base):
     # JSONB on the child keeps the five-table design.
     growth: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
                                          default=list)
+    # Ticked reasons for special care (see CARE_FACTORS). Shown to the CHW; not used by
+    # the model.
+    care_factors: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
+                                               default=list)
     created_at: Mapped[datetime] = _now()
 
 
@@ -122,6 +141,11 @@ class PredictionResult(Base):
     risk_level: Mapped[str] = mapped_column(String(10))
     anomaly_flag: Mapped[bool] = mapped_column(Boolean, default=False)
     shap_values: Mapped[dict] = mapped_column(JSONB)
+    # Hearing and vision screening answers that need a look (ids from
+    # app.services.questions.RED_FLAGS). A rule, not a prediction: any entry sends the
+    # result to the CHW whatever the model said.
+    red_flags: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
+                                            default=list)
     model_version: Mapped[str] = mapped_column(String(20))
     chw_outcome: Mapped[str | None] = mapped_column(String(30))
     # RESTRICT: a CHW with recorded outcomes cannot be deleted, so every outcome keeps
@@ -129,6 +153,22 @@ class PredictionResult(Base):
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.user_id", ondelete="RESTRICT"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _now()
+
+
+class Message(Base):
+    """Ask a CHW. One thread per caregiver: their questions and the replies of whichever
+    CHW is linked to them. A question asked before a CHW is linked waits in the thread."""
+    __tablename__ = "messages"
+
+    message_id: Mapped[uuid.UUID] = _uuid()
+    caregiver_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="CASCADE"), index=True)
+    sender_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.user_id", ondelete="CASCADE"))
+    # Set when the question was asked from a result screen, so the CHW sees which check.
+    prediction_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("prediction_results.prediction_id", ondelete="SET NULL"))
+    body: Mapped[str] = mapped_column(String(1000))
     created_at: Mapped[datetime] = _now()
 
 

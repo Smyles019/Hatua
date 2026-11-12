@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 Role = Literal["caregiver", "chw", "admin"]
+Language = Literal["en", "sw"]
 
 
 def kenyan_phone(value: str) -> str:
@@ -18,21 +19,42 @@ def kenyan_phone(value: str) -> str:
     return "+254" + m.group(1)
 
 
+def email_address(value: str) -> str:
+    """One @, a dot in the domain, no spaces; stored in lower case."""
+    v = value.strip().lower()
+    if len(v) > 254 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s.]+", v):
+        raise ValueError("enter an email address, for example amina@example.com")
+    return v
+
+
 Phone = Annotated[str, AfterValidator(kenyan_phone)]
+Email = Annotated[str, AfterValidator(email_address)]
 Password = Annotated[str, Field(min_length=6, max_length=128)]
 Name = Annotated[str, Field(min_length=1, max_length=100)]
 
 
 class Register(BaseModel):
-    """Self-registration. Always creates a caregiver account."""
+    """Self-registration. Always creates a caregiver account. The email is how the
+    person signs in; the phone number is how their CHW finds them."""
     full_name: Name
+    email: Email
     phone_number: Phone
     password: Password
 
 
+class Registered(BaseModel):
+    """Answer to /auth/register: no session yet, the email has to be confirmed first."""
+    email: str
+    verification_sent: bool = True
+
+
 class Login(BaseModel):
-    phone_number: Phone
+    email: Email
     password: str
+
+
+class EmailOnly(BaseModel):
+    email: Email
 
 
 class GoogleSignIn(BaseModel):
@@ -51,6 +73,13 @@ class UserOut(BaseModel):
     linked_chw_id: uuid.UUID | None
     is_active: bool
     email: str | None = None
+    email_verified: bool = False
+    language: Language = "en"
+
+
+class Preferences(BaseModel):
+    """What a signed-in person may change about their own account."""
+    language: Language
 
 
 class Session(BaseModel):
@@ -62,6 +91,7 @@ class Session(BaseModel):
 class NewUser(BaseModel):
     """Account created by an administrator (any role) or a CHW (caregivers only)."""
     full_name: Name
+    email: Email
     phone_number: Phone
     password: Password  # temporary password, handed to the person to change later
     role: Role = "caregiver"
@@ -69,6 +99,7 @@ class NewUser(BaseModel):
 
 class EnrolCaregiver(BaseModel):
     full_name: Name
+    email: Email
     phone_number: Phone
     password: Password
 
@@ -99,6 +130,7 @@ class UsageSummary(BaseModel):
     by_risk_level: dict[str, int]
     flagged_for_chw: int
     anomaly_flags: int
+    red_flags: int = 0
     outcomes: dict[str, int]
     awaiting_review: int
     generated_at: datetime
