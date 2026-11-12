@@ -1,0 +1,49 @@
+band,item,share_asked,domain,mode,label
+0-5,ddifmm004,0.43,fm,m,Watches own hands
+0-5,ddicmm030,0.56,cm,m,"""Smiles in response (M; can ask parents)"""
+0-5,ddigmd057,0.43,gm,d,Lifts head to 45 degrees on prone position
+0-5,ddigmd055,0.34,gm,d,No head lag if pulled to sitting
+0-5,ddifmd001,0.31,fm,d,Eyes fixate
+0-5,ddigmd006,0.33,gm,d,Grasps object within reach
+0-5,ddifmd002,0.54,fm,d,Follows with eyes and head 30d  < 0 > 30d
+0-5,ddigmd058,0.34,gm,d,Looks around to side with angle face-table 90
+0-5,ddicmd116,0.33,cm,d,Turn head to sound
+6-11,ddigmm065,0.61,gm,m,Pulls up to standing position
+6-11,ddigmd062,0.75,gm,d,Sits on buttocks while legs stretched
+6-11,ddigmd055,0.33,gm,d,No head lag if pulled to sitting
+6-11,ddifmd007,0.76,fm,d,Passes cube from hand to hand
+6-11,ddigmd006,0.33,gm,d,Grasps object within reach
+6-11,ddifmd008,0.75,fm,d,"Holds cube, grasps another one with other hand"
+6-11,ddigmd063,0.63,gm,d,Sits in stable position without support
+6-11,ddigmm060,0.78,gm,m,Rolls over back to front
+6-11,ddigmd058,0.33,gm,d,Looks around to side with angle face-table 90
+6-11,ddigmm064,0.6,gm,m,"Crawls forward, abdomen on the floor"
+6-11,ddicmd116,0.33,cm,d,Turn head to sound
+6-11,ddigmm067,0.16,gm,m,Walks while holding onto play-pen or furniture
+6-11,ddifmm012,0.16,fm,m,"""Plays 'give and take' (M; can ask parents)"""
+6-11,ddicmd136,0.15,cm,d,"""Reacts to verbal request (M; can ask parents)"""
+6-11,ddicmm034,0.59,cm,m,Babbles while playing
+6-11,ddifmm009,0.78,fm,m,Plays with both feet
+6-11,ddifmd010,0.56,fm,d,Picks up pellet between thumb and index finger
+6-11,ddigmm066,0.16,gm,m,"""Crawls, abdomen off the floor (M; can ask parents)"""
+6-11,ddicmm037,0.15,cm,m,Uses two words with comprehension
+12-17,ddigmm065,0.33,gm,m,Pulls up to standing position
+12-17,ddigmd063,0.33,gm,d,Sits in stable position without support
+12-17,ddigmm064,0.31,gm,m,"Crawls forward, abdomen on the floor"
+12-17,ddigmd068,0.61,gm,d,Walks alone
+12-17,ddigmm067,0.85,gm,m,Walks while holding onto play-pen or furniture
+12-17,ddifmm012,0.83,fm,m,"""Plays 'give and take' (M; can ask parents)"""
+12-17,ddicmd136,0.83,cm,d,"""Reacts to verbal request (M; can ask parents)"""
+12-17,ddicmm039,0.6,cm,m,Says three 'words'
+12-17,ddicmm034,0.33,cm,m,Babbles while playing
+12-17,ddicmd141,0.53,cm,d,Identifies two named objects
+12-17,ddifmd010,0.31,fm,d,Picks up pellet between thumb and index finger
+12-17,ddigmm066,0.84,gm,m,"""Crawls, abdomen off the floor (M; can ask parents)"""
+12-17,ddifmd013,0.52,fm,d,Tower of 2 cubes
+12-17,ddicmm037,0.82,cm,m,Uses two words with comprehension
+18-23,ddigmd070,0.85,gm,d,Squats or bends to pick things up
+18-23,ddigmd068,0.68,gm,d,Walks alone
+18-23,ddicmm039,0.68,cm,m,Says three 'words'
+18-23,ddifmd017,0.27,fm,d,Tower of 6 cubes
+18-23,ddicmd141,0.63,cm,d,Identifies two named objects
+18-23,ddifmd013,0.6,fm,d,Tower of 2 cubes

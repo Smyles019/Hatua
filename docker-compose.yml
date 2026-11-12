@@ -1,0 +1,46 @@
+# Local PostgreSQL for development and tests (#10), and optionally the API itself.
+#   Database only:  docker compose up -d
+#   Database + API: docker compose --profile api up -d --build   (API on localhost:8001)
+#   Stop:           docker compose down          (data kept in the hatua_pgdata volume)
+#   Reset:          docker compose down -v       (deletes all local data)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hatua-db
+    environment:
+      POSTGRES_USER: hatua
+      POSTGRES_PASSWORD: hatua_dev_password  # local development only
+      POSTGRES_DB: hatua
+    ports:
+      - "5432:5432"
+    volumes:
+      - hatua_pgdata:/var/lib/postgresql/data
+      - ./backend/db-init:/docker-entrypoint-initdb.d:ro  # creates hatua_test on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hatua -d hatua"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: hatua-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://hatua:hatua_dev_password@db:5432/hatua
+      MODEL_DIR: /srv/ml/artefacts
+      MODEL_RELEASE: ${MODEL_RELEASE:-1.0.0}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ random characters) in your shell or a root .env}
+      DEV_MODE: "false"
+    volumes:
+      - ./ml/artefacts:/srv/ml/artefacts:ro
+    ports:
+      - "8001:8000"  # 8000 stays free for uvicorn --reload during development
+
+volumes:
+  hatua_pgdata:

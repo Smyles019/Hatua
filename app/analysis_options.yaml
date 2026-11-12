@@ -1,0 +1,16 @@
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - web/**
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # Colours come from the theme at runtime (light and dark), so most widgets can't be const.
+    prefer_const_constructors: false
+    prefer_const_literals_to_create_immutables: false
+    prefer_single_quotes: true
+
+formatter:
+  page_width: 100
