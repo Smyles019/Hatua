@@ -7,8 +7,10 @@ import '../../theme/colors.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import 'admin_shell.dart';
+import '../../i18n/strings.dart';
 
-const _roleLabels = {'caregiver': 'Caregiver', 'chw': 'CHW', 'admin': 'Admin'};
+Map<String, String> get _roleLabels =>
+    {'caregiver': tr('Caregiver'), 'chw': tr('CHW'), 'admin': tr('Admin')};
 
 /// Accounts: list, filter, add, deactivate or reactivate, move a caregiver to a CHW.
 /// Accounts are never deleted (the backend keeps reviewers on recorded outcomes).
@@ -37,13 +39,13 @@ class _UsersScreenState extends State<UsersScreen> {
     final s = context.watch<Session>();
     if (_future == null || _version != s.dataVersion) _load();
     return Scaffold(
-      appBar: adminAppBar(context, 'Manage users'),
+      appBar: adminAppBar(context, tr('Manage users')),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: context.hc.plum700,
         foregroundColor: context.hc.onPrimary,
         onPressed: () => showDialog(context: context, builder: (_) => const _AddUserDialog()),
         icon: Icon(Icons.person_add_alt_1_outlined),
-        label: Text('Add user'),
+        label: Text(tr('Add user')),
       ),
       body: RefreshIndicator(
         color: context.hc.plum700,
@@ -55,15 +57,15 @@ class _UsersScreenState extends State<UsersScreen> {
             children: [
           TextField(
             decoration: InputDecoration(
-                hintText: 'Search by name or phone', prefixIcon: Icon(Icons.search_rounded)),
+                hintText: tr('Search by name or phone'), prefixIcon: Icon(Icons.search_rounded)),
             onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
           ),
           SizedBox(height: Space.s3),
           Wrap(spacing: Space.s2, runSpacing: Space.s2, children: [
-            _chip('All', null),
-            _chip('Caregivers', 'caregiver'),
-            _chip('CHWs', 'chw'),
-            _chip('Admins', 'admin'),
+            _chip(tr('All'), null),
+            _chip(tr('Caregivers'), 'caregiver'),
+            _chip(tr('CHWs'), 'chw'),
+            _chip(tr('Admins'), 'admin'),
           ]),
           SizedBox(height: Space.s4),
           AsyncView<List<AppUser>>(
@@ -78,7 +80,7 @@ class _UsersScreenState extends State<UsersScreen> {
                     u.phoneNumber.contains(_query.replaceAll(' ', ''));
               }).toList();
               if (shown.isEmpty) {
-                return EmptyPanel(title: 'No users found', message: 'Try another search.');
+                return EmptyPanel(title: tr('No users found'), message: tr('Try another search.'));
               }
               return Column(children: [
                 for (final u in shown) ...[
@@ -137,19 +139,19 @@ class _UserRow extends StatelessWidget {
             ]),
             Text(user.phoneNumber, style: t.bodySmall),
             if (user.role == 'caregiver')
-              Text(chw == null ? 'No CHW linked' : 'CHW: ${chw.fullName}', style: t.bodySmall),
+              Text(chw == null ? tr('No CHW linked') : tr('CHW: {fullName}', {'fullName': chw.fullName}), style: t.bodySmall),
             if (!user.isActive)
-              Text('Deactivated', style: t.labelLarge?.copyWith(fontSize: 14)),
+              Text(tr('Deactivated'), style: t.labelLarge?.copyWith(fontSize: 14)),
           ]),
         ),
         PopupMenuButton<String>(
-          tooltip: 'More actions',
+          tooltip: tr('More actions'),
           onSelected: (v) => _act(context, v),
           itemBuilder: (_) => [
             PopupMenuItem(
-                value: 'toggle', child: Text(user.isActive ? 'Deactivate' : 'Reactivate')),
+                value: 'toggle', child: Text(user.isActive ? tr('Deactivate') : tr('Reactivate'))),
             if (user.role == 'caregiver')
-              PopupMenuItem(value: 'chw', child: Text('Change CHW')),
+              PopupMenuItem(value: 'chw', child: Text(tr('Change CHW'))),
           ],
         ),
       ]),
@@ -166,7 +168,7 @@ class _UserRow extends StatelessWidget {
         final picked = await showDialog<String>(
           context: context,
           builder: (ctx) => SimpleDialog(
-            title: Text('CHW for ${user.fullName}'),
+            title: Text(tr('CHW for {fullName}', {'fullName': user.fullName})),
             children: [
               for (final c in active)
                 SimpleDialogOption(
@@ -175,7 +177,7 @@ class _UserRow extends StatelessWidget {
                 ),
               SimpleDialogOption(
                 onPressed: () => Navigator.pop(ctx, ''),
-                child: Text('Remove link'),
+                child: Text(tr('Remove link')),
               ),
             ],
           ),
@@ -201,6 +203,7 @@ class _AddUserDialog extends StatefulWidget {
 class _AddUserDialogState extends State<_AddUserDialog> {
   final _form = GlobalKey<FormState>();
   final _name = TextEditingController();
+  final _email = TextEditingController();
   final _phone = TextEditingController();
   final _password = TextEditingController();
   String _role = 'chw';
@@ -209,6 +212,7 @@ class _AddUserDialogState extends State<_AddUserDialog> {
   @override
   void dispose() {
     _name.dispose();
+    _email.dispose();
     _phone.dispose();
     _password.dispose();
     super.dispose();
@@ -221,6 +225,7 @@ class _AddUserDialogState extends State<_AddUserDialog> {
     try {
       await s.api.post('/admin/users', {
         'full_name': _name.text.trim(),
+        'email': _email.text.trim(),
         'phone_number': _phone.text.trim(),
         'password': _password.text,
         'role': _role,
@@ -237,24 +242,30 @@ class _AddUserDialogState extends State<_AddUserDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Add user'),
+      title: Text(tr('Add user')),
       content: SingleChildScrollView(
         child: Form(
           key: _form,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             LabeledField(
-                label: 'Full name',
+                label: tr('Full name'),
                 controller: _name,
-                validator: (v) => requiredField(v, 'a name')),
+                validator: (v) => requiredField(v, tr('a name'))),
             SizedBox(height: Space.s3),
             LabeledField(
-                label: 'Phone number',
+                label: tr('Email (used to sign in)'),
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                validator: emailValidator),
+            SizedBox(height: Space.s3),
+            LabeledField(
+                label: tr('Phone number'),
                 controller: _phone,
                 keyboardType: TextInputType.phone,
                 validator: phoneValidator),
             SizedBox(height: Space.s3),
             LabeledField(
-                label: 'Temporary password',
+                label: tr('Temporary password'),
                 controller: _password,
                 validator: passwordValidator),
             SizedBox(height: Space.s3),
@@ -269,8 +280,8 @@ class _AddUserDialogState extends State<_AddUserDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-        TextButton(onPressed: _busy ? null : _save, child: Text('Add')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel'))),
+        TextButton(onPressed: _busy ? null : _save, child: Text(tr('Add'))),
       ],
     );
   }

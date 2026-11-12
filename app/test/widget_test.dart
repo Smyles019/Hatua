@@ -18,6 +18,15 @@ void main() {
     }
   });
 
+  test('emailValidator matches the backend rule', () {
+    for (final ok in ['amina@example.com', ' Amina.W@mail.co.ke ', 'a+b@x.org']) {
+      expect(emailValidator(ok), isNull, reason: ok);
+    }
+    for (final bad in ['', 'not-an-email', 'a@b', 'two@@example.com', 'a b@example.com']) {
+      expect(emailValidator(bad), isNotNull, reason: bad);
+    }
+  });
+
   test('passwordValidator needs 6 characters', () {
     expect(passwordValidator('12345'), isNotNull);
     expect(passwordValidator('123456'), isNull);

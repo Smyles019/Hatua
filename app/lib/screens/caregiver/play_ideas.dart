@@ -1,5 +1,9 @@
 /// Everyday play ideas by age, in the spirit of WHO/UNICEF Care for Child Development:
 /// simple activities with things already at home. One idea is shown per day.
+library;
+
+import '../../i18n/strings.dart';
+
 class PlayIdea {
   const PlayIdea(this.title, this.body);
   final String title;
@@ -39,5 +43,7 @@ PlayIdea playIdeaFor(int ageMonths, {DateTime? day}) {
       orElse: () => _ideas.last);
   final d = day ?? DateTime.now();
   final dayOfYear = d.difference(DateTime(d.year)).inDays;
-  return band.$3[dayOfYear % band.$3.length];
+  final idea = band.$3[dayOfYear % band.$3.length];
+  // In the chosen language; {name} stays for the caller to fill in.
+  return PlayIdea(tr(idea.title), tr(idea.body));
 }

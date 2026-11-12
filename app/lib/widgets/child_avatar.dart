@@ -26,8 +26,8 @@ class AnimalAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final img = ClipRRect(
-      borderRadius: BorderRadius.circular(size * 0.22),
+    // Round everywhere a child appears (home chips, lists, profile, picker).
+    final img = ClipOval(
       child: SvgPicture.asset('assets/avatars/$avatarId.svg',
           width: size, height: size, excludeFromSemantics: true),
     );
@@ -35,7 +35,7 @@ class AnimalAvatar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size * 0.22 + 3),
+        shape: BoxShape.circle,
         border: Border.all(color: context.hc.plum700, width: 2.5),
       ),
       child: img,
@@ -67,14 +67,13 @@ class AvatarPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
+    // Pictures only: the animal names are not shown, but stay as screen-reader labels.
     return GridView.count(
       crossAxisCount: 4,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: Space.s3,
       crossAxisSpacing: Space.s3,
-      childAspectRatio: 0.78,
       children: [
         for (final id in avatarIds)
           Semantics(
@@ -82,10 +81,10 @@ class AvatarPicker extends StatelessWidget {
             selected: selected == id,
             label: avatarNames[id],
             child: InkWell(
-              borderRadius: BorderRadius.circular(Radii.md),
+              customBorder: const CircleBorder(),
               onTap: () => onPick(id),
-              child: Column(children: [
-                Stack(clipBehavior: Clip.none, children: [
+              child: Center(
+                child: Stack(clipBehavior: Clip.none, children: [
                   AnimalAvatar(id, size: 64, ring: selected == id),
                   if (selected == id)
                     Positioned(
@@ -100,9 +99,7 @@ class AvatarPicker extends StatelessWidget {
                       ),
                     ),
                 ]),
-                const SizedBox(height: Space.s1),
-                Text(avatarNames[id]!, style: t.bodySmall),
-              ]),
+              ),
             ),
           ),
       ],

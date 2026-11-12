@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/colors.dart';
+import '../i18n/strings.dart';
 
 enum Audience { caregiver, chw }
 
@@ -48,22 +49,22 @@ class RiskChip extends StatelessWidget {
 
   _ChipSpec _spec(HatuaPalette c) {
     final caregiver = audience == Audience.caregiver;
-    final low = _ChipSpec(caregiver ? 'On track' : 'Low', c.riskLowBg,
+    final low = _ChipSpec(caregiver ? tr('On track') : tr('Low'), c.riskLowBg,
         Border.all(color: c.riskLow, width: 2), Icons.check_circle_outline_rounded, c.riskLowText);
-    final medium = _ChipSpec(caregiver ? 'Watch' : 'Medium', c.riskMedium, null,
+    final medium = _ChipSpec(caregiver ? tr('Watch') : tr('Medium'), c.riskMedium, null,
         Icons.change_history_rounded, c.onBright);
     switch (kind) {
       case RiskChipKind.anomaly:
-        return _ChipSpec('Answers look unusual', c.surfaceCard,
+        return _ChipSpec(tr('Answers look unusual'), c.surfaceCard,
             Border.all(color: c.plum700, width: 2), Icons.help_outline_rounded, c.plum900);
       case RiskChipKind.domain:
         return level == 'needs_support'
-            ? _ChipSpec('Needs support', c.riskMedium, null, Icons.change_history_rounded,
+            ? _ChipSpec(tr('Needs support'), c.riskMedium, null, Icons.change_history_rounded,
                 c.onBright)
-            : _ChipSpec('On track', low.fill, low.border, low.icon, low.text);
+            : _ChipSpec(tr('On track'), low.fill, low.border, low.icon, low.text);
       case RiskChipKind.risk:
         return switch (level) {
-          'high' => _ChipSpec(caregiver ? 'Check soon' : 'High', c.riskHigh, null,
+          'high' => _ChipSpec(caregiver ? tr('Check soon') : tr('High'), c.riskHigh, null,
               Icons.warning_amber_rounded, c.onBright),
           'medium' => medium,
           _ => low,

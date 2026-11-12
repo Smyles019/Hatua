@@ -5,7 +5,9 @@ import '../../state/session.dart';
 import '../../theme/colors.dart';
 import '../../theme/theme.dart';
 import '../../widgets/sprout.dart';
+import '../../widgets/theme_toggle.dart';
 import 'sign_up_screen.dart';
+import '../../i18n/strings.dart';
 
 /// Three short welcome pages, shown once on first launch.
 class WelcomeScreen extends StatefulWidget {
@@ -46,9 +48,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.s4, Space.s2, Space.s2, 0),
             child: Row(children: [
-              Text('Hatua', style: t.titleLarge?.copyWith(color: c.plum700)),
+              Text(tr('Hatua'), style: t.titleLarge?.copyWith(color: c.plum700)),
               const Spacer(),
-              if (!last) TextButton(onPressed: _finish, child: const Text('Skip')),
+              // The first thing a new person sees, so the language can be picked here.
+              const LanguageToggleButton(),
+              if (!last) TextButton(onPressed: _finish, child: Text(tr('Skip'))),
             ]),
           ),
           Expanded(
@@ -58,8 +62,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               children: [
                 _Page(
                   art: _Blob(child: const Sprout(pose: SproutPose.waving, size: 180)),
-                  title: 'Welcome to Hatua',
-                  body: 'Check how your child is growing, one small step at a time.',
+                  title: tr('Welcome to Hatua'),
+                  body: tr('Check how your child is growing, one small step at a time.'),
                 ),
                 _Page(
                   art: _Blob(
@@ -69,8 +73,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       _AnswerCard(),
                     ]),
                   ),
-                  title: 'Answer a few simple questions',
-                  body: 'Short questions about what your child can do. It takes about 5 minutes.',
+                  title: tr('Answer a few simple questions'),
+                  body: tr('Short questions about what your child can do. It takes about 5 minutes.'),
                 ),
                 _Page(
                   art: _Blob(
@@ -79,8 +83,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       _MiniPath(),
                     ]),
                   ),
-                  title: "See your child's journey",
-                  body: 'Get things to try at home, and a health worker follows up if needed.',
+                  title: tr("See your child's journey"),
+                  body: tr('Get things to try at home, and a health worker follows up if needed.'),
                 ),
               ],
             ),
@@ -103,14 +107,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             child: Column(children: [
               FilledButton(
                 onPressed: last ? () => _finish(signUp: true) : _next,
-                child: Text(last ? 'Get started' : 'Next'),
+                child: Text(last ? tr('Get started') : tr('Next')),
               ),
               // Same height on every page so the button does not jump.
               SizedBox(
                 height: Space.touch,
                 child: last
                     ? TextButton(
-                        onPressed: _finish, child: const Text('I already have an account'))
+                        onPressed: _finish, child: Text(tr('I already have an account')))
                     : null,
               ),
             ]),
@@ -190,7 +194,7 @@ class _AnswerCard extends StatelessWidget {
       decoration: BoxDecoration(
           color: c.surfaceCard, borderRadius: BorderRadius.circular(Radii.md)),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
-          children: [option('Yes', true), option('No', false), option("Don't know", false)]),
+          children: [option(tr('Yes'), true), option(tr('No'), false), option(tr("Don't know"), false)]),
     );
   }
 }
