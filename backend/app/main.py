@@ -50,6 +50,12 @@ if WEB.is_dir():
     def favicon():
         return FileResponse(WEB / "favicon.svg", media_type="image/svg+xml")
 
+    # Outside development the bare domain opens the website (in development / is the test UI).
+    if not settings.dev_mode:
+        @app.get("/", include_in_schema=False)
+        def home():
+            return RedirectResponse("/web/")
+
 
 @app.get("/i18n/sw.js", include_in_schema=False)
 def swahili_for_the_website():
