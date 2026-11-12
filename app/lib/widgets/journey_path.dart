@@ -6,9 +6,10 @@ import '../api/models.dart';
 import '../theme/colors.dart';
 import '../theme/theme.dart';
 import 'sprout.dart';
+import '../i18n/strings.dart';
 
-/// The age bands the backend assesses in: CREDI bands under 24 months
-/// (hatua_ml/norms/who_motor.py) and ECDI2030 bands from 24 to 59 months
+/// The age bands the backend assesses in: the under-24 model's bands
+/// (hatua_ml/models/explain.py UNDER2_BANDS) and ECDI2030 bands from 24 to 59 months
 /// (hatua_ml/features/ecdi2030.py).
 const ageBands = [
   (0, 5), (6, 11), (12, 17), (18, 23), (24, 29), (30, 35), (36, 41), (42, 47), (48, 59),
@@ -74,7 +75,7 @@ class JourneyPath extends StatelessWidget {
     }
 
     return Semantics(
-      label: 'Development journey',
+      label: tr('Development journey'),
       child: SizedBox(
         height: y,
         child: Stack(clipBehavior: Clip.none, children: [
@@ -155,7 +156,7 @@ class JourneyPath extends StatelessWidget {
     if (s.state == _StoneState.done) {
       return Semantics(
         button: true,
-        label: 'Open the check from ${_band(s)}',
+        label: tr('Open the check from {age}', {'age': _band(s)}),
         child: GestureDetector(onTap: () => onOpen(s.latest!), child: stone),
       );
     }
@@ -168,9 +169,9 @@ class JourneyPath extends StatelessWidget {
     final title = Text(_band(s), style: t.titleMedium);
     final Widget status = switch (s.state) {
       _StoneState.done => _statusDot(context, s.latest!.riskLevel),
-      _StoneState.missed => Text('No check', style: t.bodySmall),
-      _StoneState.future => Text('Coming up', style: t.bodySmall),
-      _StoneState.current => Text('Check due now',
+      _StoneState.missed => Text(tr('No check'), style: t.bodySmall),
+      _StoneState.future => Text(tr('Coming up'), style: t.bodySmall),
+      _StoneState.current => Text(tr('Check due now'),
           style: t.bodyMedium?.copyWith(color: c.plum900, fontWeight: FontWeight.w700)),
     };
     final content = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -181,7 +182,7 @@ class JourneyPath extends StatelessWidget {
         const SizedBox(height: Space.s2),
         SizedBox(
           width: 160,
-          child: FilledButton(onPressed: onStart, child: const Text('Start check')),
+          child: FilledButton(onPressed: onStart, child: Text(tr('Start check'))),
         ),
       ],
     ]);
@@ -199,9 +200,9 @@ class JourneyPath extends StatelessWidget {
     final c = context.hc;
     final t = Theme.of(context).textTheme;
     final (color, text) = switch (level) {
-      'high' => (c.riskHigh, 'Check soon'),
-      'medium' => (c.riskMedium, 'Watch'),
-      _ => (c.riskLow, 'On track'),
+      'high' => (c.riskHigh, tr('Check soon')),
+      'medium' => (c.riskMedium, tr('Watch')),
+      _ => (c.riskLow, tr('On track')),
     };
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Container(
@@ -214,8 +215,8 @@ class JourneyPath extends StatelessWidget {
   }
 
   static String _band(_Stone s) => s.hi == 59 && s.lo == 48
-      ? '4 to 5 years'
-      : '${s.lo} to ${s.hi} months';
+      ? tr('4 to 5 years')
+      : tr('{lo} to {hi} months', {'lo': s.lo, 'hi': s.hi});
 }
 
 class _Stone {

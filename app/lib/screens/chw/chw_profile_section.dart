@@ -9,6 +9,7 @@ import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import 'chw_data.dart';
 import 'link_caregiver_screen.dart';
+import '../../i18n/strings.dart';
 
 /// The CHW's part of the profile: their caseload, the outcomes they have logged, and
 /// a shortcut to link a caregiver. Built from /chw/caregivers and /chw/cases.
@@ -79,21 +80,20 @@ class _ChwProfileSectionState extends State<ChwProfileSection> {
         crossAxisSpacing: Space.s3,
         childAspectRatio: 1.7,
         children: [
-          _Stat(Icons.people_outline_rounded, '${w.caregivers.length}', 'Caregivers linked',
+          _Stat(Icons.people_outline_rounded, '${w.caregivers.length}', tr('Caregivers linked'),
               c.sky100),
-          _Stat(Icons.child_care_rounded, '${w.children}', 'Children', c.sun100),
-          _Stat(Icons.flag_outlined, '${w.open.length}', 'Open cases', c.riskMediumBg),
-          _Stat(Icons.fact_check_outlined, '${w.logged.length}', 'Outcomes logged', c.plum100),
+          _Stat(Icons.child_care_rounded, '${w.children}', tr('Children'), c.sun100),
+          _Stat(Icons.flag_outlined, '${w.open.length}', tr('Open cases'), c.riskMediumBg),
+          _Stat(Icons.fact_check_outlined, '${w.logged.length}', tr('Outcomes logged'), c.plum100),
         ],
       ),
       const SizedBox(height: Space.s6),
-      Text('Your outcomes', style: t.titleLarge),
+      Text(tr('Your outcomes'), style: t.titleLarge),
       const SizedBox(height: Space.s1),
       Text(
         w.lastLogged == null
-            ? 'No outcomes logged yet.'
-            : '${w.loggedLast30Days} in the last 30 days · last on '
-                '${DateFormat('d MMM yyyy').format(w.lastLogged!)}',
+            ? tr('No outcomes logged yet.')
+            : tr('{n} in the last 30 days · last on {date}', {'n': w.loggedLast30Days, 'date': DateFormat('d MMM yyyy').format(w.lastLogged!)}),
         style: t.bodySmall,
       ),
       const SizedBox(height: Space.s3),
@@ -120,16 +120,16 @@ class _ChwProfileSectionState extends State<ChwProfileSection> {
         onTap: () => Navigator.of(context)
             .push(MaterialPageRoute(builder: (_) => const LinkCaregiverScreen())),
         child: Row(children: [
-          Icon(Icons.person_add_alt_rounded, color: c.onBright),
+          Icon(Icons.person_add_alt_rounded, color: c.plum900),
           const SizedBox(width: Space.s3),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Link a caregiver', style: t.labelLarge?.copyWith(color: c.onBright)),
-              Text('Enrol a new caregiver or link one by phone number.',
-                  style: t.bodySmall?.copyWith(color: c.onBright)),
+              Text(tr('Link a caregiver'), style: t.labelLarge?.copyWith(color: c.plum900)),
+              Text(tr('Enrol a new caregiver or link one by phone number.'),
+                  style: t.bodySmall?.copyWith(color: c.plum900)),
             ]),
           ),
-          Icon(Icons.chevron_right_rounded, color: c.onBright),
+          Icon(Icons.chevron_right_rounded, color: c.plum900),
         ]),
       ),
     ]);
@@ -146,7 +146,7 @@ class _Stat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final on = context.hc.onBright;
+    final on = context.hc.plum900;
     return HatuaCard(
       color: color,
       padding: const EdgeInsets.all(Space.s3),

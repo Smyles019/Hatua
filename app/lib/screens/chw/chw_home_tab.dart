@@ -10,12 +10,17 @@ import 'case_review_screen.dart';
 import 'chw_data.dart';
 import 'flagged_screen.dart';
 import 'link_caregiver_screen.dart';
+import 'questions_screen.dart';
+import '../../i18n/strings.dart';
 
 class _HomeData {
-  _HomeData(this.open, this.all, this.caregivers);
+  _HomeData(this.open, this.all, this.caregivers, this.threads);
   final List<Assessment> open;
   final List<Assessment> all;
   final List<LinkedCaregiver> caregivers;
+  final List<ThreadSummary> threads;
+
+  int get questionsWaiting => threads.where((t) => t.waitingForChw).length;
 
   int get reviewedThisWeek {
     final since = DateTime.now().subtract(Duration(days: 7));
@@ -42,9 +47,10 @@ class _ChwHomeTabState extends State<ChwHomeTab> {
         loadCases(s.api),
         loadCases(s.api, includeReviewed: true),
         loadCaregivers(s.api),
+        loadThreads(s.api),
       ]);
       return _HomeData(r[0] as List<Assessment>, r[1] as List<Assessment>,
-          r[2] as List<LinkedCaregiver>);
+          r[2] as List<LinkedCaregiver>, r[3] as List<ThreadSummary>);
     }();
   }
 
@@ -62,8 +68,8 @@ class _ChwHomeTabState extends State<ChwHomeTab> {
       },
       child: ListView(padding: EdgeInsets.zero, children: [
         BlobHeader(
-          title: 'Hello, ${s.user?.firstName ?? ''}',
-          subtitle: 'Children who need a follow-up are listed under Flagged.',
+          title: tr('Hello, {name}', {'name': s.user?.firstName ?? ''}),
+          subtitle: tr('Children who need a follow-up are listed under Flagged.'),
           variant: 1,
         ),
         Padding(
@@ -78,7 +84,7 @@ class _ChwHomeTabState extends State<ChwHomeTab> {
                   Expanded(
                     child: _Tile(
                       value: d.open.length,
-                      label: 'Flagged to review',
+                      label: tr('Flagged to review'),
                       color: d.open.isEmpty ? context.hc.riskLowBg : context.hc.riskMediumBg,
                       onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => FlaggedScreen())),
@@ -88,24 +94,26 @@ class _ChwHomeTabState extends State<ChwHomeTab> {
                   Expanded(
                     child: _Tile(
                         value: d.reviewedThisWeek,
-                        label: 'Reviewed this week',
+                        label: tr('Reviewed this week'),
                         color: context.hc.sky100),
                   ),
                   SizedBox(width: Space.s3),
                   Expanded(
                     child: _Tile(
                         value: d.caregivers.length,
-                        label: 'Caregivers linked',
+                        label: tr('Caregivers linked'),
                         color: context.hc.sun100),
                   ),
                 ]),
+                SizedBox(height: Space.s3),
+                _QuestionsCard(waiting: d.questionsWaiting),
                 SizedBox(height: Space.s6),
-                Text('Most recent flags', style: t.titleLarge),
+                Text(tr('Most recent flags'), style: t.titleLarge),
                 SizedBox(height: Space.s3),
                 if (d.open.isEmpty)
                   EmptyPanel(
-                    title: 'All caught up',
-                    message: 'No children need a follow-up right now.',
+                    title: tr('All caught up'),
+                    message: tr('No children need a follow-up right now.'),
                     icon: Icons.check_circle_outline_rounded,
                   ),
                 for (final a in d.open.take(3)) ...[
@@ -121,12 +129,46 @@ class _ChwHomeTabState extends State<ChwHomeTab> {
                   onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => LinkCaregiverScreen())),
                   icon: Icon(Icons.person_add_alt_1_outlined),
-                  label: Text('Link or enrol a caregiver'),
+                  label: Text(tr('Link or enrol a caregiver')),
                 ),
               ],
             ),
           ),
         ),
+      ]),
+    );
+  }
+}
+
+/// Ask a CHW: opens the Questions inbox, highlighted while a question is waiting.
+class _QuestionsCard extends StatelessWidget {
+  const _QuestionsCard({required this.waiting});
+  final int waiting;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = waiting > 0 ? context.hc.plum900 : context.hc.plum900;
+    return HatuaCard(
+      color: waiting > 0 ? context.hc.sun100 : null,
+      onTap: () => Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const QuestionsScreen())),
+      child: Row(children: [
+        Icon(Icons.chat_bubble_outline_rounded, color: fg),
+        SizedBox(width: Space.s3),
+        Expanded(
+          child: Text(
+            waiting == 0
+                ? tr('Questions from caregivers')
+                : waiting == 1
+                    ? tr('1 question is waiting for your reply')
+                    : tr('{waiting} questions are waiting for your reply', {'waiting': waiting}),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(color: waiting > 0 ? context.hc.plum900 : null),
+          ),
+        ),
+        Icon(Icons.chevron_right_rounded, color: fg),
       ]),
     );
   }

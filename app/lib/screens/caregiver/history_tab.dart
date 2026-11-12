@@ -10,6 +10,7 @@ import '../../widgets/common.dart';
 import '../../widgets/risk_chip.dart';
 import 'caregiver_data.dart';
 import 'result_screen.dart';
+import '../../i18n/strings.dart';
 
 /// Every check for every child as a timeline, newest first, filterable by child.
 class HistoryTab extends StatefulWidget {
@@ -35,7 +36,7 @@ class _HistoryTabState extends State<HistoryTab> {
     final s = context.watch<Session>();
     if (_future == null || _version != s.dataVersion) _load();
     return Scaffold(
-      appBar: AppBar(title: Text('History')),
+      appBar: AppBar(title: Text(tr('History'))),
       body: AsyncView<List<ChildWithChecks>>(
         future: _future!,
         onRetry: () => setState(_load),
@@ -55,14 +56,14 @@ class _HistoryTabState extends State<HistoryTab> {
     return ListView(padding: EdgeInsets.all(Space.s4), children: [
       if (items.length > 1)
         Wrap(spacing: Space.s2, runSpacing: Space.s2, children: [
-          _filter('All', null),
+          _filter(tr('All'), null),
           for (final i in items) _filter(i.child.firstName, i.child.childId),
         ]),
       SizedBox(height: Space.s4),
       if (checks.isEmpty)
         EmptyPanel(
-          title: 'No checks yet',
-          message: 'Your checks will appear here so you can see how your child grows.',
+          title: tr('No checks yet'),
+          message: tr('Your checks will appear here so you can see how your child grows.'),
           icon: Icons.history_rounded,
         ),
       for (var k = 0; k < checks.length; k++)
@@ -99,7 +100,7 @@ class _HistoryTabState extends State<HistoryTab> {
                         if (checks[k].caregiverMessage != null)
                           Padding(
                             padding: EdgeInsets.only(top: Space.s1),
-                            child: Text('Health worker reviewed', style: t.bodySmall),
+                            child: Text(tr('Health worker reviewed'), style: t.bodySmall),
                           ),
                       ]),
                     ),

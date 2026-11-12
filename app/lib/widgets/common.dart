@@ -4,6 +4,7 @@ import '../api/api_client.dart';
 import '../theme/colors.dart';
 import '../theme/theme.dart';
 import 'sprout.dart';
+import '../i18n/strings.dart';
 
 /// Plum header with a rounded bottom edge and circles bleeding off the edges.
 /// Used only on entry screens (splash, sign in, sign up, home dashboards).
@@ -112,7 +113,8 @@ class HatuaCard extends StatelessWidget {
 }
 
 /// Text field with its label always visible above it (never a placeholder label).
-class LabeledField extends StatelessWidget {
+/// A password field ([obscure]) gets an eye button to show or hide what was typed.
+class LabeledField extends StatefulWidget {
   const LabeledField({
     super.key,
     required this.label,
@@ -139,22 +141,38 @@ class LabeledField extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
+  State<LabeledField> createState() => _LabeledFieldState();
+}
+
+class _LabeledFieldState extends State<LabeledField> {
+  bool _hidden = true;
+
+  @override
   Widget build(BuildContext context) {
+    final w = widget;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label.toUpperCase(), style: Theme.of(context).textTheme.labelMedium),
+      Text(w.label.toUpperCase(), style: Theme.of(context).textTheme.labelMedium),
       SizedBox(height: Space.s1),
       TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        obscureText: obscure,
-        validator: validator,
-        textInputAction: textInputAction,
-        readOnly: readOnly,
-        onTap: onTap,
+        controller: w.controller,
+        keyboardType: w.keyboardType,
+        obscureText: w.obscure && _hidden,
+        validator: w.validator,
+        textInputAction: w.textInputAction,
+        readOnly: w.readOnly,
+        onTap: w.onTap,
         style: Theme.of(context).textTheme.bodyMedium,
         decoration: InputDecoration(
-          hintText: hint,
-          prefixIcon: icon == null ? null : Icon(icon),
+          hintText: w.hint,
+          prefixIcon: w.icon == null ? null : Icon(w.icon),
+          suffixIcon: !w.obscure
+              ? null
+              : IconButton(
+                  tooltip: _hidden ? tr('Show password') : tr('Hide password'),
+                  icon: Icon(
+                      _hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                  onPressed: () => setState(() => _hidden = !_hidden),
+                ),
         ),
       ),
     ]);
@@ -265,7 +283,7 @@ class ErrorPanel extends StatelessWidget {
               textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
           if (onRetry != null) ...[
             SizedBox(height: Space.s4),
-            OutlinedButton(onPressed: onRetry, child: Text('Try again')),
+            OutlinedButton(onPressed: onRetry, child: Text(tr('Try again'))),
           ],
         ]),
       ),
@@ -318,7 +336,7 @@ class InitialAvatar extends StatelessWidget {
 
 /// Shows an API error (or any error) as a snackbar.
 void showError(BuildContext context, Object error) {
-  final msg = error is ApiException ? error.message : 'Something went wrong. Please try again.';
+  final msg = error is ApiException ? error.message : tr('Something went wrong. Please try again.');
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(msg)));
@@ -332,21 +350,61 @@ void showMessage(BuildContext context, String msg) {
 
 /// Plain-language age: "8 months", "2 years 3 months".
 String ageLabel(int months) {
-  if (months < 24) return '$months month${months == 1 ? '' : 's'}';
+  if (months < 24) return months == 1 ? tr('1 month') : tr('{n} months', {'n': months});
   final y = months ~/ 12, m = months % 12;
-  return m == 0 ? '$y years' : '$y years $m month${m == 1 ? '' : 's'}';
+  if (m == 0) return tr('{n} years', {'n': y});
+  return m == 1 ? tr('{y} years 1 month', {'y': y}) : tr('{y} years {m} months', {'y': y, 'm': m});
 }
 
 String? requiredField(String? v, String what) =>
-    (v == null || v.trim().isEmpty) ? 'Please enter $what' : null;
+    (v == null || v.trim().isEmpty) ? tr('Please enter {what}', {'what': what}) : null;
 
 /// Accepts the same formats as the backend (07.., 01.., 2547.., +2547..).
 String? phoneValidator(String? v) {
   final d = (v ?? '').replaceAll(RegExp(r'[\s-]'), '');
   return RegExp(r'^(?:\+?254|0)[17]\d{8}$').hasMatch(d)
       ? null
-      : 'Enter a Kenyan mobile number, for example 0712 345 678';
+      : tr('Enter a Kenyan mobile number, for example 0712 345 678');
 }
 
+/// Same rule as the backend: one @, a dot in the domain, no spaces.
+String? emailValidator(String? v) =>
+    RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s.]+$').hasMatch((v ?? '').trim())
+        ? null
+        : tr('Enter an email address, for example amina@example.com');
+
 String? passwordValidator(String? v) =>
-    (v == null || v.length < 6) ? 'Use at least 6 characters' : null;
+    (v == null || v.length < 6) ? tr('Use at least 6 characters') : null;
+
+
+/// Tick boxes for the reasons for special care ([labels] is careFactorLabels from
+/// api/models.dart: id -> plain wording). Reports the new set on every change.
+class CareFactorChecks extends StatelessWidget {
+  const CareFactorChecks(
+      {super.key, required this.selected, required this.onChanged, this.labels});
+  final Set<String> selected;
+  final ValueChanged<Set<String>> onChanged;
+  final Map<String, String>? labels;
+
+  static const _defaults = {
+    'low_birth_weight': 'Weighed less than 2.5 kg at birth',
+    'multiple_birth': 'Born as a twin or triplet',
+    'short_birth_spacing': 'Born less than 2 years after the child before',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      for (final e in (labels ?? _defaults).entries)
+        CheckboxListTile(
+          value: selected.contains(e.key),
+          onChanged: (on) =>
+              onChanged(on == true ? {...selected, e.key} : ({...selected}..remove(e.key))),
+          title: Text(e.value, style: Theme.of(context).textTheme.bodyMedium),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+        ),
+    ]);
+  }
+}

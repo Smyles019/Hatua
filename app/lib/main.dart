@@ -12,12 +12,28 @@ import 'state/session.dart';
 import 'state/theme_controller.dart';
 import 'theme/theme.dart';
 import 'widgets/web_frame.dart';
+import 'i18n/strings.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // The language first, so the first screen is already in it.
+  final language = LanguageController();
+  await language.restore();
   final session = Session(ApiClient())..restore();
   final theme = ThemeController()..restore();
+  // Once someone is signed in, line the phone and the account up on one language.
+  String? synced;
+  session.addListener(() {
+    final user = session.user;
+    if (user != null && user.userId != synced) {
+      synced = user.userId;
+      language.syncWith(user.language, session.api);
+    } else if (user == null) {
+      synced = null;
+    }
+  });
   runApp(MultiProvider(providers: [
+    ChangeNotifierProvider.value(value: language),
     ChangeNotifierProvider.value(value: session),
     ChangeNotifierProvider.value(value: theme),
   ], child: const HatuaApp()));
@@ -28,7 +44,11 @@ class HatuaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A new key when the language changes rebuilds every screen in the new language
+    // (the app opens again at its first screen).
+    final lang = context.watch<LanguageController>().language;
     return MaterialApp(
+      key: ValueKey(lang),
       title: 'Hatua',
       debugShowCheckedModeBanner: false,
       theme: buildHatuaTheme(Brightness.light),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../api/models.dart';
+import '../../state/pending_check.dart';
 import '../../state/session.dart';
 import '../../theme/colors.dart';
 import '../../theme/theme.dart';
@@ -10,6 +11,7 @@ import '../../widgets/common.dart';
 import '../../widgets/domain.dart';
 import '../../widgets/sprout.dart';
 import 'result_screen.dart';
+import '../../i18n/strings.dart';
 
 /// The caregiver milestone check: one question per screen, answers as the backend
 /// offers them (Yes / No / Don't know, or frequency options for two items).
@@ -44,11 +46,11 @@ class _CheckScreenState extends State<CheckScreen> {
     final leave = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Stop this check?'),
-        content: Text('Your answers so far will not be saved.'),
+        title: Text(tr('Stop this check?')),
+        content: Text(tr('Your answers so far will not be saved.')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Keep going')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Stop')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Keep going'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Stop'))),
         ],
       ),
     );
@@ -67,12 +69,36 @@ class _CheckScreenState extends State<CheckScreen> {
       await Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => ResultScreen(assessment: result, justSubmitted: true)));
     } catch (e) {
+      if (classifySendError(e) == SendFailure.retryLater) {
+        // No connection or the server is down: keep the answers on the phone (#8).
+        await session.savePending(PendingCheck(
+          childId: q.childId,
+          childName: widget.child.firstName,
+          responses: Map.of(_answers),
+          savedAt: DateTime.now(),
+        ));
+        if (!mounted) return;
+        await _showSavedForLater();
+        if (mounted) Navigator.of(context).pop();
+        return;
+      }
       if (mounted) {
         showError(context, e);
         setState(() => _sending = false);
       }
     }
   }
+
+  Future<void> _showSavedForLater() => showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(tr('Saved on this phone')),
+          content: Text(tr("We couldn't send {firstName}'s check right now. Your answers are saved and will be sent when you are back online. You can also send them from the home screen.", {'firstName': widget.child.firstName})),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('OK'))),
+          ],
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -89,9 +115,9 @@ class _CheckScreenState extends State<CheckScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text("${widget.child.firstName}'s check"),
+          title: Text(tr("{firstName}'s check", {'firstName': widget.child.firstName})),
           leading: IconButton(
-            tooltip: 'Close',
+            tooltip: tr('Close'),
             icon: Icon(Icons.close_rounded),
             onPressed: () async {
               final nav = Navigator.of(context);
@@ -101,7 +127,9 @@ class _CheckScreenState extends State<CheckScreen> {
         ),
         body: AsyncView<Questionnaire>(
           future: _future,
-          onRetry: () => setState(() => _future = _load()),
+          onRetry: () => setState(() {
+            _future = _load();
+          }),
           builder: (context, q) => _question(context, q),
         ),
       ),
@@ -122,7 +150,7 @@ class _CheckScreenState extends State<CheckScreen> {
           SizedBox(width: Space.s3),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Check for ${widget.child.firstName}', style: t.titleMedium),
+              Text(tr('Check for {firstName}', {'firstName': widget.child.firstName}), style: t.titleMedium),
               Text(ageLabel(widget.child.ageMonths), style: t.bodySmall),
             ]),
           ),
@@ -131,7 +159,7 @@ class _CheckScreenState extends State<CheckScreen> {
             decoration: BoxDecoration(
                 color: context.hc.sun100, borderRadius: BorderRadius.circular(999)),
             child: Text('${_index + 1} of $total',
-                style: t.labelMedium?.copyWith(color: context.hc.onBright)),
+                style: t.labelMedium?.copyWith(color: context.hc.plum900)),
           ),
         ]),
         SizedBox(height: Space.s3),
@@ -149,14 +177,25 @@ class _CheckScreenState extends State<CheckScreen> {
           padding: EdgeInsets.all(Space.s4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              DomainTag(DomainStyle.domainOfItem(question.item)),
+              // The last few questions are the hearing and eye checks, not a domain.
+              question.screening == null
+                  ? DomainTag(DomainStyle.domainOfItem(question.item))
+                  : ScreeningTag(question.screening!),
               Spacer(),
               const Sprout(pose: SproutPose.thinking, size: 56, bob: false),
             ]),
             SizedBox(height: Space.s3),
             Text(question.text, style: t.headlineSmall),
+            // The example under the question, so the question itself stays short.
+            if (question.hint != null) ...[
+              SizedBox(height: Space.s1),
+              Text(question.hint!, style: t.bodyLarge),
+            ],
             SizedBox(height: Space.s2),
-            Text('Think about what ${widget.child.firstName} does on most days.',
+            Text(
+                question.screening == null
+                    ? tr('Think about what {firstName} does on most days.', {'firstName': widget.child.firstName})
+                    : tr("A quick check of hearing and eyes. If you are not sure, choose Don't know."),
                 style: t.bodySmall),
           ]),
         ),
@@ -181,16 +220,16 @@ class _CheckScreenState extends State<CheckScreen> {
                   }
                 },
           child: Text(_sending
-              ? 'Getting results...'
+              ? tr('Getting results...')
               : last
-                  ? 'See results'
-                  : 'Next question'),
+                  ? tr('See results')
+                  : tr('Next question')),
         ),
         if (_index > 0) ...[
           SizedBox(height: Space.s2),
           TextButton(
             onPressed: _sending ? null : () => setState(() => _index--),
-            child: Text('Back to previous question'),
+            child: Text(tr('Back to previous question')),
           ),
         ],
       ]),

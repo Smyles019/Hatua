@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import '../i18n/strings.dart';
 
 /// Base URL of the FastAPI backend. The Android emulator reaches the host machine at
 /// 10.0.2.2; the web version on the same machine uses localhost. Override for a real
@@ -74,10 +75,10 @@ class ApiClient {
     try {
       res = await call().timeout(_timeout);
     } on TimeoutException {
-      throw ApiException(0, 'The connection is slow. Please try again.');
+      throw ApiException(0, tr('The connection is slow. Please try again.'));
     } on http.ClientException {
       // Also covers socket errors on Android and failed fetches on the web.
-      throw ApiException(0, 'No connection. Check your data or Wi-Fi and try again.');
+      throw ApiException(0, tr('No connection. Check your data or Wi-Fi and try again.'));
     }
 
     final text = utf8.decode(res.bodyBytes);
@@ -105,13 +106,13 @@ class ApiClient {
       final msg = (detail.first as Map)['msg']?.toString() ?? '';
       return _sentence(msg.replaceFirst('Value error, ', ''));
     }
-    if (status == 503) return 'The service is not ready yet. Please try again later.';
-    if (status >= 500) return 'Something went wrong on our side. Please try again.';
-    return 'Something went wrong. Please try again.';
+    if (status == 503) return tr('The service is not ready yet. Please try again later.');
+    if (status >= 500) return tr('Something went wrong on our side. Please try again.');
+    return tr('Something went wrong. Please try again.');
   }
 
   static String _sentence(String s) {
-    if (s.isEmpty) return 'Something went wrong. Please try again.';
+    if (s.isEmpty) return tr('Something went wrong. Please try again.');
     final t = s[0].toUpperCase() + s.substring(1);
     return t.endsWith('.') ? t : '$t.';
   }

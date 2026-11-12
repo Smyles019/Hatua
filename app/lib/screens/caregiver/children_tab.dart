@@ -10,6 +10,7 @@ import '../../widgets/common.dart';
 import 'add_child_screen.dart';
 import 'caregiver_data.dart';
 import 'child_profile_screen.dart';
+import '../../i18n/strings.dart';
 
 class ChildrenTab extends StatefulWidget {
   const ChildrenTab({super.key});
@@ -34,7 +35,7 @@ class _ChildrenTabState extends State<ChildrenTab> {
     if (_future == null || _version != s.dataVersion) _load();
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: Text('Children')),
+      appBar: AppBar(title: Text(tr('Children'))),
       body: RefreshIndicator(
         color: context.hc.plum700,
         onRefresh: () async {
@@ -50,8 +51,8 @@ class _ChildrenTabState extends State<ChildrenTab> {
               children: [
                 if (children.isEmpty)
                   EmptyPanel(
-                      title: 'No children yet',
-                      message: 'Add a child under five to start checking.',
+                      title: tr('No children yet'),
+                      message: tr('Add a child under five to start checking.'),
                       icon: Icons.child_care_rounded),
                 for (final c in children) ...[
                   HatuaCard(
@@ -77,7 +78,7 @@ class _ChildrenTabState extends State<ChildrenTab> {
                   onPressed: () => Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => AddChildScreen())),
                   icon: Icon(Icons.add_rounded),
-                  label: Text('Add a child'),
+                  label: Text(tr('Add a child')),
                 ),
               ],
             ),

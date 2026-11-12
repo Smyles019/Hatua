@@ -9,12 +9,15 @@ import '../../widgets/child_avatar.dart';
 import '../../widgets/common.dart';
 import '../../widgets/risk_chip.dart';
 import '../../widgets/sprout.dart';
+import '../messages/thread_screen.dart';
 import 'add_child_screen.dart';
+import 'care_schedule.dart';
 import 'caregiver_data.dart';
 import 'caregiver_shell.dart';
 import 'child_profile_screen.dart';
 import 'play_ideas.dart';
 import 'result_screen.dart';
+import '../../i18n/strings.dart';
 
 /// Caregiver home: a child switcher, then the selected child's latest result, next
 /// check, quick tools and a play idea for their age.
@@ -34,6 +37,19 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
     final session = context.read<Session>();
     _version = session.dataVersion;
     _future = loadChildrenWithChecks(session.api);
+    // Quietly retry checks saved while offline (#8). Only speaks up if something
+    // was sent or could not be used; "still offline" stays silent here.
+    if (session.pending.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _sendPending(quiet: true));
+    }
+  }
+
+  Future<void> _sendPending({bool quiet = false}) async {
+    final report = await context.read<Session>().sendPending();
+    if (!mounted) return;
+    final msg = report.message;
+    final onlyStillWaiting = report.sent.isEmpty && report.rejected.isEmpty;
+    if (msg != null && !(quiet && onlyStillWaiting)) showMessage(context, msg);
   }
 
   @override
@@ -50,10 +66,19 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
       },
       child: ListView(padding: EdgeInsets.zero, children: [
         BlobHeader(
-          title: 'Hi, $name',
-          subtitle: "Let's see how your children are growing.",
+          title: tr('Hi, {name}', {'name': name}),
+          subtitle: tr("Let's see how your children are growing."),
           height: 180,
         ),
+        if (session.pending.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.s4, Space.s4, Space.s4, 0),
+            child: _PendingCard(
+              names: session.pending.map((p) => p.childName).toList(),
+              sending: session.sendingPending,
+              onSend: () => _sendPending(),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.all(Space.s4),
           child: AsyncView<List<ChildWithChecks>>(
@@ -73,11 +98,11 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
     final t = Theme.of(context).textTheme;
     if (items.isEmpty) {
       return Column(children: [
-        const EmptyPanel(
-          title: "Let's get started",
-          message: 'Add your child to start checking how they are growing.',
+        EmptyPanel(
+          title: tr("Let's get started"),
+          message: tr('Add your child to start checking how they are growing.'),
         ),
-        FilledButton(onPressed: _addChild, child: const Text('Add a child')),
+        FilledButton(onPressed: _addChild, child: Text(tr('Add a child'))),
       ]);
     }
     final item = items.firstWhere((i) => i.child.childId == _selectedId,
@@ -97,7 +122,7 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
           ],
           ActionChip(
             avatar: Icon(Icons.add_rounded, color: context.hc.plum900),
-            label: const Text('Add'),
+            label: Text(tr('Add')),
             onPressed: _addChild,
           ),
         ]),
@@ -107,15 +132,15 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
         HatuaCard(
           color: context.hc.sun100,
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(Icons.health_and_safety_outlined, color: context.hc.onBright),
+            Icon(Icons.health_and_safety_outlined, color: context.hc.plum900),
             const SizedBox(width: Space.s3),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('From your health worker',
-                    style: t.labelLarge?.copyWith(color: context.hc.onBright)),
+                Text(tr('From your health worker'),
+                    style: t.labelLarge?.copyWith(color: context.hc.plum900)),
                 const SizedBox(height: Space.s1),
                 Text(item.latest!.caregiverMessage!,
-                    style: t.bodyMedium?.copyWith(color: context.hc.onBright)),
+                    style: t.bodyMedium?.copyWith(color: context.hc.plum900)),
               ]),
             ),
           ]),
@@ -125,47 +150,48 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
       _SummaryCard(item: item),
       const SizedBox(height: Space.s3),
       _NextCheckCard(item: item),
-      const SizedBox(height: Space.s6),
-      Text('Quick tools', style: t.titleLarge),
       const SizedBox(height: Space.s3),
-      GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: Space.s3,
-        crossAxisSpacing: Space.s3,
-        childAspectRatio: 1.5,
+      _CareCard(item: item),
+      const SizedBox(height: Space.s6),
+      Text(tr('Quick tools'), style: t.titleLarge),
+      const SizedBox(height: Space.s3),
+      // Two per row. Tiles grow to fit their text (long Swahili titles, large phone
+      // fonts) instead of a fixed height that overflows.
+      _ToolGrid(
         children: [
           _Tool(
             icon: Icons.route_rounded,
             color: context.hc.sky100,
-            title: 'Journey',
-            subtitle: 'Checks by age',
+            title: tr('Journey'),
+            subtitle: tr('Checks by age'),
             onTap: () => _openProfile(item),
           ),
           _Tool(
             icon: Icons.monitor_weight_outlined,
             color: context.hc.sun100,
-            title: 'Growth',
-            subtitle: 'Weight and height',
+            title: tr('Growth'),
+            subtitle: tr('Weight and height'),
             onTap: () => _openProfile(item),
           ),
           _Tool(
             icon: Icons.history_rounded,
             color: context.hc.blush100,
-            title: 'Past results',
-            subtitle: '${item.checks.length} check${item.checks.length == 1 ? '' : 's'}',
+            title: tr('Past results'),
+            subtitle: item.checks.length == 1
+                ? tr('1 check')
+                : tr('{n} checks', {'n': item.checks.length}),
             onTap: item.latest == null
-                ? () => showMessage(context, 'No checks yet.')
+                ? () => showMessage(context, tr('No checks yet.'))
                 : () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => ResultScreen(assessment: item.latest!))),
           ),
           _Tool(
-            icon: Icons.person_add_alt_rounded,
+            icon: Icons.chat_bubble_outline_rounded,
             color: context.hc.plum100,
-            title: 'Add a child',
-            subtitle: 'Under five',
-            onTap: _addChild,
+            title: tr('Ask a health worker'),
+            subtitle: tr('Send a question'),
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const ThreadScreen())),
           ),
         ],
       ),
@@ -177,6 +203,44 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
 
   void _openProfile(ChildWithChecks item) => Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ChildProfileScreen(childId: item.child.childId)));
+}
+
+/// Checks finished while offline and still waiting to be sent (#8).
+class _PendingCard extends StatelessWidget {
+  const _PendingCard({required this.names, required this.sending, required this.onSend});
+  final List<String> names;
+  final bool sending;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final one = names.length == 1;
+    return HatuaCard(
+      color: context.hc.sun100,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.cloud_upload_outlined, color: context.hc.plum900),
+          SizedBox(width: Space.s3),
+          Expanded(
+            child: Text(
+                one
+                    ? tr("{first}'s check is saved on this phone and waiting to be sent.", {'first': names.first})
+                    : tr('{n} checks are saved on this phone and waiting to be sent: {names}.', {'n': names.length, 'names': names.join(', ')}),
+                style: t.bodyMedium),
+          ),
+        ]),
+        SizedBox(height: Space.s3),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(
+            onPressed: sending ? null : onSend,
+            child: Text(sending ? tr('Sending...') : tr('Send now')),
+          ),
+        ),
+      ]),
+    );
+  }
 }
 
 class _ChildChip extends StatelessWidget {
@@ -231,11 +295,11 @@ class _SummaryCard extends StatelessWidget {
     final name = item.child.firstName;
     final on = context.hc.onHeader;
     final headline = latest == null
-        ? 'No checks yet for $name'
+        ? tr('No checks yet for {name}', {'name': name})
         : switch (latest.riskLevel) {
-            'high' => "Let's get $name checked by a health worker",
-            'medium' => "Let's keep an eye on $name",
-            _ => '$name is on track',
+            'high' => tr("Let's get {name} checked by a health worker", {'name': name}),
+            'medium' => tr("Let's keep an eye on {name}", {'name': name}),
+            _ => tr('{name} is on track', {'name': name}),
           };
     final needs = latest?.domains.where((d) => d.needsSupport).length ?? 0;
     return Container(
@@ -255,12 +319,12 @@ class _SummaryCard extends StatelessWidget {
         const SizedBox(height: Space.s1),
         Text(
           latest == null
-              ? 'A check takes about 5 minutes. You answer simple questions about what $name '
-                  'can do.'
+              ? tr('A check takes about 5 minutes. You answer simple questions about what {name} can do.', {'name': name})
               : needs == 0
-                  ? 'All four areas look on track. Keep playing and talking together.'
-                  : '$needs area${needs == 1 ? '' : 's'} could use more practice. See the '
-                      'results for things to try.',
+                  ? tr('All four areas look on track. Keep playing and talking together.')
+                  : (needs == 1
+                      ? tr('1 area could use more practice. See the results for things to try.')
+                      : tr('{n} areas could use more practice. See the results for things to try.', {'n': needs})),
           style: t.bodyMedium?.copyWith(color: on),
         ),
         if (latest != null) ...[
@@ -272,7 +336,7 @@ class _SummaryCard extends StatelessWidget {
               onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => ResultScreen(assessment: latest))),
               icon: const Icon(Icons.arrow_forward_rounded),
-              label: const Text('Full results'),
+              label: Text(tr('Full results')),
             ),
           ),
         ],
@@ -292,26 +356,73 @@ class _NextCheckCard extends StatelessWidget {
     final now = DateTime.now();
     final isDue = due != null && !due.isAfter(now);
     final text = due == null
-        ? 'All checks for this age are done. You can still start a new one.'
+        ? tr('All checks for this age are done. You can still start a new one.')
         : isDue
             ? item.latest == null
-                ? 'Start the first check for ${item.child.firstName}.'
-                : 'A new check is due for ${item.child.firstName}.'
-            : 'Next check around ${DateFormat('d MMM yyyy').format(due)}.';
+                ? tr('Start the first check for {firstName}.', {'firstName': item.child.firstName})
+                : tr('A new check is due for {firstName}.', {'firstName': item.child.firstName})
+            : tr('Next check around {date}.', {'date': DateFormat('d MMM yyyy').format(due)});
     return HatuaCard(
       color: context.hc.sun100,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          Icon(Icons.event_available_rounded, color: context.hc.onBright),
+          Icon(Icons.event_available_rounded, color: context.hc.plum900),
           const SizedBox(width: Space.s3),
           Expanded(
-              child: Text(text, style: t.bodyMedium?.copyWith(color: context.hc.onBright))),
+              child: Text(text, style: t.bodyMedium?.copyWith(color: context.hc.plum900))),
         ]),
         const SizedBox(height: Space.s3),
         FilledButton.icon(
           onPressed: () => startCheck(context, child: item.child),
           icon: const Icon(Icons.play_arrow_rounded),
-          label: Text(item.latest == null ? 'Start first check' : 'Start a check'),
+          label: Text(item.latest == null ? tr('Start first check') : tr('Start a check')),
+        ),
+      ]),
+    );
+  }
+}
+
+/// "Coming up at the clinic": the next vitamin A, deworming, vaccine and monthly visit,
+/// from the routine schedule in the Mother and Child Health Handbook.
+class _CareCard extends StatelessWidget {
+  const _CareCard({required this.item});
+  final ChildWithChecks item;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final today = DateTime.now();
+    final care = nextCare(item.child.dateOfBirth, today: today);
+    if (care.isEmpty) return const SizedBox.shrink();
+    return HatuaCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.local_hospital_outlined, color: context.hc.plum900),
+          const SizedBox(width: Space.s2),
+          Expanded(child: Text(tr('Coming up at the clinic'), style: t.titleMedium)),
+        ]),
+        const SizedBox(height: Space.s2),
+        for (final c in care)
+          Padding(
+            padding: const EdgeInsets.only(top: Space.s2),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(c.title, style: t.labelLarge),
+                  Text(c.detail, style: t.bodySmall),
+                ]),
+              ),
+              const SizedBox(width: Space.s2),
+              Text(
+                c.dueNow(today) ? tr('Due now') : DateFormat('d MMM yyyy').format(c.due),
+                style: t.labelLarge,
+              ),
+            ]),
+          ),
+        const SizedBox(height: Space.s3),
+        Text(
+          tr('These are the usual ages. The app does not know what {firstName} has already had, so check the clinic booklet.', {'firstName': item.child.firstName}),
+          style: t.bodySmall,
         ),
       ]),
     );
@@ -345,11 +456,33 @@ class _Tool extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           child: Icon(icon, color: context.hc.onBright, size: 22),
         ),
-        const Spacer(),
+        const SizedBox(height: Space.s3),
         Text(title, style: t.labelLarge),
         Text(subtitle, style: t.bodySmall),
       ]),
     );
+  }
+}
+
+/// Lays tools out two per row; both tiles in a row take the height of the taller one.
+class _ToolGrid extends StatelessWidget {
+  const _ToolGrid({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i += 2) {
+      if (i > 0) rows.add(const SizedBox(height: Space.s3));
+      rows.add(IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: children[i]),
+          const SizedBox(width: Space.s3),
+          Expanded(child: i + 1 < children.length ? children[i + 1] : const SizedBox()),
+        ]),
+      ));
+    }
+    return Column(children: rows);
   }
 }
 
@@ -368,7 +501,7 @@ class _PlayCard extends StatelessWidget {
         const SizedBox(width: Space.s3),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('PLAY IDEA FOR TODAY', style: t.labelMedium),
+            Text(tr('PLAY IDEA FOR TODAY'), style: t.labelMedium),
             const SizedBox(height: Space.s1),
             Text(idea.title, style: t.titleMedium),
             const SizedBox(height: Space.s1),

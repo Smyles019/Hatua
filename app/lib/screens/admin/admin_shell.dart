@@ -5,6 +5,7 @@ import '../../widgets/nav_shell.dart';
 import '../profile_screen.dart';
 import 'summary_screen.dart';
 import 'users_screen.dart';
+import '../../i18n/strings.dart';
 
 /// Administrators get a plain working layout: no blob header, no playful layer.
 class AdminShell extends StatelessWidget {
@@ -13,9 +14,9 @@ class AdminShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NavShell(tabs: [
-      NavTab('Users', Icons.manage_accounts_outlined, (_) => UsersScreen()),
-      NavTab('Summary', Icons.bar_chart_rounded, (_) => SummaryScreen()),
-      NavTab('Profile', Icons.person_outline_rounded, (_) => ProfileScreen()),
+      NavTab(tr('Users'), Icons.manage_accounts_outlined, (_) => UsersScreen()),
+      NavTab(tr('Summary'), Icons.bar_chart_rounded, (_) => SummaryScreen()),
+      NavTab(tr('Profile'), Icons.person_outline_rounded, (_) => ProfileScreen()),
     ]);
   }
 }
