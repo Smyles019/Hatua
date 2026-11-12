@@ -1,8 +1,15 @@
 """Whole flow through the API (#12 to #16):
 caregiver assessment -> CHW queue -> outcome -> caregiver sees the CHW's message.
 """
-from conftest import (PASSWORD, add_child, answers, login, make_user, months_ago, new_phone,
+from conftest import (PASSWORD, add_child, answers, confirm_email, email_for, login,
+                      make_user, months_ago,
+                      new_phone,
                       register_caregiver, submit)
+
+
+def model_questions(q: dict) -> list[dict]:
+    """The questions that go to the model, without the hearing and vision red flags."""
+    return [x for x in q["questions"] if not x.get("screening")]
 
 
 def chw_with_caregiver(client, db_session):
@@ -11,8 +18,14 @@ def chw_with_caregiver(client, db_session):
     chw = login(client, chw_phone)
     phone = new_phone()
     r = client.post("/chw/caregivers", headers=chw,
-                    json={"full_name": "Achieng", "phone_number": phone, "password": PASSWORD})
+                    json={"full_name": "Achieng", "email": email_for(phone),
+                          "phone_number": phone, "password": PASSWORD})
     assert r.status_code == 201 and r.json()["linked_chw_id"]
+    assert r.json()["email_verified"] is False
+    # Cannot sign in until the emailed link is opened.
+    r = client.post("/auth/login", json={"email": email_for(phone), "password": PASSWORD})
+    assert r.status_code == 403
+    confirm_email(client, email_for(phone))
     return chw, login(client, phone)
 
 
@@ -21,7 +34,7 @@ def test_whole_flow(client, db_session):
     child = add_child(client, cg, 48)["child_id"]
 
     q = client.get("/assessments/questions", params={"child_id": child}, headers=cg).json()
-    assert q["method"] == "model" and len(q["questions"]) == 13
+    assert q["method"] == "model" and len(model_questions(q)) == 13
     assert "Imani" in q["questions"][0]["text"]
 
     low = submit(client, cg, child, answers(client, cg, child, True))
@@ -69,7 +82,7 @@ def test_under_24_months_uses_the_motor_milestone_check(client, db_session):
     child = add_child(client, cg, 20, name="Baby")["child_id"]
     q = client.get("/assessments/questions", params={"child_id": child}, headers=cg).json()
     assert q["method"] == "milestone_check" and q["model_version"] == "who-mgrs-2006"
-    assert q["age_band"] == "18-23" and len(q["questions"]) == 6
+    assert q["age_band"] == "18-23" and len(model_questions(q)) == 6
 
     ok = submit(client, cg, child, answers(client, cg, child, True))
     assert ok["method"] == "milestone_check" and ok["risk_level"] == "low"
@@ -143,3 +156,34 @@ def test_self_registered_caregiver_linked_later_by_a_chw(client, db_session):
         "caregiver_id": user["user_id"], "first_name": "Zawadi", "date_of_birth": months_ago(43),
         "sex": "female", "location": "Kibra"}).status_code == 201
     assert [c["first_name"] for c in client.get("/children", headers=cg).json()] == ["Zawadi"]
+
+
+def test_under_24_months_uses_the_under2_model(client, db_session, under2_model):
+    """With the under-24 model loaded, a 9-month-old gets the model's questions and a
+    motor and language explanation; cognitive and social-emotional are not assessed and
+    never overwrite the milestone summary."""
+    from app.db.models import MilestoneSummary
+    from sqlalchemy import select
+
+    chw, cg = chw_with_caregiver(client, db_session)
+    child = add_child(client, cg, 9, name="Amani")["child_id"]
+    q = client.get("/assessments/questions", params={"child_id": child}, headers=cg).json()
+    assert q["method"] == "model" and q["model_version"] == under2_model["version"]
+    assert q["age_band"] == "6-11" and 1 <= len(model_questions(q)) <= 15
+    assert all(x["item"].startswith("ddi") for x in model_questions(q))
+
+    ok = submit(client, cg, child, answers(client, cg, child, True))
+    assert ok["method"] == "model" and ok["risk_level"] == "low" and not ok["sent_to_chw"]
+
+    behind = submit(client, cg, child, answers(client, cg, child, False))
+    assert behind["risk_level"] in ("medium", "high") and behind["sent_to_chw"]
+    status = {d["domain"]: d["status"] for d in behind["domains"]}
+    assert status["cognitive"] == status["social_emotional"] == "not_assessed"
+    assert behind["top_reasons"] and all(r["question"] for r in behind["top_reasons"])
+
+    with db_session() as db:
+        s = db.scalar(select(MilestoneSummary).where(MilestoneSummary.child_id == child))
+        assert "cognitive" not in s.domain_status and "social_emotional" not in s.domain_status
+
+    case = client.get("/chw/cases", headers=chw).json()[0]
+    assert case["model"]["gest_weeks_assumed"] == 40.0

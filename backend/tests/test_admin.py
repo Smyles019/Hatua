@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from conftest import (PASSWORD, add_child, answers, login, make_user, new_phone,
+from conftest import (PASSWORD, add_child, answers, confirm_email, email_for, login, make_user, new_phone,
                       register_caregiver, submit)
 
 
@@ -16,7 +16,8 @@ def admin(client, db_session):
 def test_admin_creates_a_chw_who_can_sign_in(client, admin):
     phone = new_phone()
     r = client.post("/admin/users", headers=admin,
-                    json={"full_name": "Otieno", "phone_number": phone, "password": PASSWORD,
+                    json={"full_name": "Otieno", "email": email_for(phone),
+                          "phone_number": phone, "password": PASSWORD,
                           "role": "chw"})
     assert r.status_code == 201 and r.json()["role"] == "chw"
     assert client.get("/auth/me", headers=login(client, phone)).json()["role"] == "chw"
@@ -53,7 +54,7 @@ def test_deactivation_rules(client, admin, db_session):
     client.put(f"/admin/users/{cg['user_id']}/chw", headers=admin, json={"chw_id": None})
     r = client.patch(f"/admin/users/{chw.user_id}", headers=admin, json={"is_active": False})
     assert r.status_code == 200
-    assert client.post("/auth/login", json={"phone_number": chw_phone,
+    assert client.post("/auth/login", json={"email": email_for(chw_phone),
                                             "password": PASSWORD}).status_code == 401
     inactive = client.get("/admin/users", params={"active": False}, headers=admin).json()
     assert str(chw.user_id) in {u["user_id"] for u in inactive}
@@ -66,7 +67,9 @@ def test_usage_summary_counts(client, admin, db_session):
     chw = login(client, chw_phone)
     phone = new_phone()
     client.post("/chw/caregivers", headers=chw,
-                json={"full_name": "C", "phone_number": phone, "password": PASSWORD})
+                json={"full_name": "C", "email": email_for(phone),
+                      "phone_number": phone, "password": PASSWORD})
+    confirm_email(client, email_for(phone))
     cg = login(client, phone)
     child = add_child(client, cg, 45)["child_id"]
     submit(client, cg, child, answers(client, cg, child, True))

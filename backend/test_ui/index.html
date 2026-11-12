@@ -178,7 +178,7 @@ async function signIn(actor) {
   }
   const u = users.find(x => x.user_id === actor);
   if (!u) throw fail({ status: 0 }, null, "Unknown user");
-  const { res, data } = await raw("/auth/login", { method: "POST", body: { phone_number: u.phone_number, password: PASSWORD } });
+  const { res, data } = await raw("/auth/login", { method: "POST", body: { email: u.email, password: PASSWORD } });
   if (!res.ok) throw fail(res, data, `Cannot sign in as ${u.full_name}: only accounts made on this page (password ${PASSWORD}) work here`);
   return tokens[actor] = data.access_token;
 }
@@ -214,7 +214,7 @@ async function refresh() {
   const cgs = users.filter(u => u.role === "caregiver" && u.is_active), chws = users.filter(u => u.role === "chw" && u.is_active);
   for (const s of ["#l-cg", "#c-cg", "#a-cg"]) { const v = $(s).value; $(s).innerHTML = opts(cgs, "user_id", u => u.full_name); if (v) $(s).value = v; }
   for (const s of ["#l-chw", "#w-chw"]) { const v = $(s).value; $(s).innerHTML = opts(chws, "user_id", u => u.full_name); if (v) $(s).value = v; }
-  $("#users").innerHTML = users.map(u => `<tr><td>${esc(u.full_name)}${u.is_active ? "" : " <span class=mute>(inactive)</span>"}</td><td>${u.role}</td><td>${esc(u.phone_number)}</td><td>${esc(name(u.linked_chw_id)) || "-"}</td></tr>`).join("")
+  $("#users").innerHTML = users.map(u => `<tr><td>${esc(u.full_name)}${u.is_active ? "" : " <span class=mute>(inactive)</span>"}</td><td>${u.role}</td><td>${esc(u.phone_number)}<br><span class=mute>${esc(u.email || "no email")}</span></td><td>${esc(name(u.linked_chw_id)) || "-"}</td></tr>`).join("")
     || `<tr><td colspan="4" class="mute">No users yet.</td></tr>`;
   fillChildren();
 }
@@ -228,7 +228,9 @@ function fillChildren() {
 
 function dobMonthsAgo(m) { const d = new Date(); d.setMonth(d.getMonth() - m); d.setDate(d.getDate() - 3); return d.toISOString().slice(0, 10); }
 const phone = () => "07" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0");
-const newUser = (full_name, role, phone_number) => api("/admin/users", { method: "POST", body: { full_name, phone_number: phone_number || phone(), password: PASSWORD, role } });
+// People sign in with an email; this page makes one up for each account it creates.
+const email = role => `${role}-${Math.random().toString(36).slice(2, 8)}@hatua.test`;
+const newUser = (full_name, role, phone_number) => api("/admin/users", { method: "POST", body: { full_name, email: email(role), phone_number: phone_number || phone(), password: PASSWORD, role } });
 
 // ---------- Setup ----------
 $("#seed").onclick = async () => {

@@ -2,7 +2,8 @@
 so ids cannot be used to probe for children or cases that exist."""
 import pytest
 
-from conftest import (PASSWORD, add_child, answers, login, make_user, months_ago, new_phone,
+from conftest import (PASSWORD, add_child, answers, confirm_email, email_for, login, make_user, months_ago,
+                      new_phone,
                       register_caregiver, submit)
 
 
@@ -14,7 +15,9 @@ def world(client, db_session):
     chw1, chw2 = login(client, p1), login(client, p2)
     phone_a = new_phone()
     client.post("/chw/caregivers", headers=chw1,
-                json={"full_name": "A", "phone_number": phone_a, "password": PASSWORD})
+                json={"full_name": "A", "email": email_for(phone_a),
+                      "phone_number": phone_a, "password": PASSWORD})
+    confirm_email(client, email_for(phone_a))
     cg_a = login(client, phone_a)
     _, cg_b = register_caregiver(client, "B")
     child_a = add_child(client, cg_a, 40, name="ChildA")["child_id"]

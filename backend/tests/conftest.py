@@ -21,6 +21,7 @@ from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
+from app.core import mailer  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.models import User  # noqa: E402
@@ -44,6 +45,34 @@ def synthetic_release(tmp_path_factory):
     yield path
     settings.model_dir, settings.model_release = saved
     inference.get_release.cache_clear()
+
+
+UNDER2_DIR = BACKEND.parent / "ml" / "artefacts" / "xgboost_under2" / "short_30"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def no_under2_model_by_default(tmp_path_factory):
+    """Most tests check the WHO motor fallback for under-24 children, so point the
+    under-24 model at an empty folder unless a test asks for it (under2_model)."""
+    saved = settings.under2_model_dir
+    settings.under2_model_dir = str(tmp_path_factory.mktemp("no_under2"))
+    inference.get_under2.cache_clear()
+    yield
+    settings.under2_model_dir = saved
+    inference.get_under2.cache_clear()
+
+
+@pytest.fixture
+def under2_model():
+    """The real under-24 model artefacts (ml/artefacts/xgboost_under2/short_30)."""
+    if not (UNDER2_DIR / "items_by_month.json").is_file():
+        pytest.skip("under-24 model artefacts not built (python -m hatua_ml.models.train_under2)")
+    saved = settings.under2_model_dir
+    settings.under2_model_dir = str(UNDER2_DIR)
+    inference.get_under2.cache_clear()
+    yield inference.get_under2()
+    settings.under2_model_dir = saved
+    inference.get_under2.cache_clear()
 
 
 @pytest.fixture(scope="session")
@@ -101,10 +130,29 @@ def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def email_for(phone: str) -> str:
+    """The email the tests give the account with this phone number (any spelling of it)."""
+    return f"u{''.join(ch for ch in phone if ch.isdigit())[-9:]}@example.com"
+
+
+def confirm_email(client, email: str) -> None:
+    """Open the newest confirmation link 'sent' to this address (see app.core.mailer)."""
+    sent = next(m for m in reversed(mailer.outbox) if m.to == email and "/auth/verify" in m.body)
+    link = next(w for w in sent.body.split() if "/auth/verify?token=" in w)
+    r = client.get(link.removeprefix(settings.public_base_url))
+    assert r.status_code == 200, r.text
+
+
 def register_caregiver(client, name="Achieng") -> tuple[dict, dict]:
-    r = client.post("/auth/register", json={"full_name": name, "phone_number": new_phone(),
-                                            "password": PASSWORD})
+    """Register, confirm the email and sign in. Returns the user and their auth headers."""
+    phone = new_phone()
+    email = email_for(phone)
+    r = client.post("/auth/register", json={"full_name": name, "email": email,
+                                            "phone_number": phone, "password": PASSWORD})
     assert r.status_code == 201, r.text
+    confirm_email(client, email)
+    r = client.post("/auth/login", json={"email": email, "password": PASSWORD})
+    assert r.status_code == 200, r.text
     return r.json()["user"], auth(r.json()["access_token"])
 
 
@@ -112,15 +160,16 @@ def make_user(db_session, role: str, name: str | None = None) -> tuple[User, str
     """Create a user straight in the database (how the first admin is made). Returns user, phone."""
     phone = "+254" + new_phone()[1:]
     with db_session() as db:
-        user = User(full_name=name or role, phone_number=phone,
-                    password_hash=hash_password(PASSWORD), role=role)
+        user = User(full_name=name or role, phone_number=phone, email=email_for(phone),
+                    email_verified=True, password_hash=hash_password(PASSWORD), role=role)
         db.add(user)
         db.commit()
         return user, phone
 
 
 def login(client, phone: str) -> dict:
-    r = client.post("/auth/login", json={"phone_number": phone, "password": PASSWORD})
+    """Sign in the account the tests made with this phone number (its email is email_for)."""
+    r = client.post("/auth/login", json={"email": email_for(phone), "password": PASSWORD})
     assert r.status_code == 200, r.text
     return auth(r.json()["access_token"])
 

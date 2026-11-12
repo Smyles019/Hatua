@@ -22,8 +22,10 @@ admin_only = require("admin")
 
 @router.post("/users", response_model=UserOut, status_code=201)
 def create_user(body: NewUser, _: User = Depends(admin_only), db: Session = Depends(get_db)):
-    return add_user(db, full_name=body.full_name, phone_number=body.phone_number,
-                    password=body.password, role=body.role)
+    # The administrator vouches for the address, so no confirmation email is needed.
+    return add_user(db, full_name=body.full_name, email=body.email,
+                    phone_number=body.phone_number, password=body.password, role=body.role,
+                    email_verified=True)
 
 
 @router.get("/users", response_model=list[UserOut])
@@ -107,13 +109,15 @@ def summary(start: date | None = None, end: date | None = None,
                .where(*within(CaregiverInput.submitted_at)).subquery())
     by_risk = dict(db.execute(select(results.c.risk_level, func.count())
                               .group_by(results.c.risk_level)).all())
-    routed = ((results.c.risk_level.in_(("medium", "high"))) | results.c.anomaly_flag)
+    routed = ((results.c.risk_level.in_(("medium", "high"))) | results.c.anomaly_flag
+              | (func.jsonb_array_length(results.c.red_flags) > 0))
     outcomes = dict(db.execute(select(PredictionResult.chw_outcome, func.count())
                                .where(PredictionResult.chw_outcome.is_not(None),
                                       *within(PredictionResult.reviewed_at))
                                .group_by(PredictionResult.chw_outcome)).all())
     awaiting = db.scalar(select(func.count()).select_from(PredictionResult).where(
-        (PredictionResult.risk_level.in_(("medium", "high")) | PredictionResult.anomaly_flag),
+        (PredictionResult.risk_level.in_(("medium", "high")) | PredictionResult.anomaly_flag
+         | (func.jsonb_array_length(PredictionResult.red_flags) > 0)),
         PredictionResult.chw_outcome.is_(None)))
     users = dict(db.execute(select(User.role, func.count()).where(User.is_active)
                             .group_by(User.role)).all())
@@ -126,6 +130,8 @@ def summary(start: date | None = None, end: date | None = None,
         "flagged_for_chw": db.scalar(select(func.count()).select_from(results).where(routed)),
         "anomaly_flags": db.scalar(select(func.count()).select_from(results)
                                    .where(results.c.anomaly_flag)),
+        "red_flags": db.scalar(select(func.count()).select_from(results)
+                               .where(func.jsonb_array_length(results.c.red_flags) > 0)),
         "outcomes": {o: outcomes.get(o, 0) for o in CHW_OUTCOMES},
         "awaiting_review": awaiting,
         "generated_at": datetime.now(timezone.utc),
