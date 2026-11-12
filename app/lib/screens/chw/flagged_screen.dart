@@ -11,6 +11,7 @@ import '../../widgets/common.dart';
 import '../../widgets/risk_chip.dart';
 import 'case_review_screen.dart';
 import 'chw_data.dart';
+import '../../i18n/strings.dart';
 
 /// Open cases routed to this CHW, newest first, filterable by level.
 class FlaggedScreen extends StatefulWidget {
@@ -45,7 +46,7 @@ class _FlaggedScreenState extends State<FlaggedScreen> {
     final s = context.watch<Session>();
     if (_future == null || _version != s.dataVersion) _load();
     return Scaffold(
-      appBar: AppBar(title: Text('Flagged children')),
+      appBar: AppBar(title: Text(tr('Flagged children'))),
       body: RefreshIndicator(
         color: context.hc.plum700,
         onRefresh: () async {
@@ -54,10 +55,10 @@ class _FlaggedScreenState extends State<FlaggedScreen> {
         },
         child: ListView(padding: EdgeInsets.all(Space.s4), children: [
           Wrap(spacing: Space.s2, runSpacing: Space.s2, children: [
-            _chip('All', _Filter.all),
-            _chip('High', _Filter.high),
-            _chip('Medium', _Filter.medium),
-            _chip('Unusual answers', _Filter.unusual),
+            _chip(tr('All'), _Filter.all),
+            _chip(tr('High'), _Filter.high),
+            _chip(tr('Medium'), _Filter.medium),
+            _chip(tr('Unusual answers'), _Filter.unusual),
           ]),
           SizedBox(height: Space.s4),
           AsyncView<List<Assessment>>(
@@ -67,8 +68,8 @@ class _FlaggedScreenState extends State<FlaggedScreen> {
               final shown = cases.where(_keep).toList();
               if (shown.isEmpty) {
                 return EmptyPanel(
-                  title: 'All caught up',
-                  message: 'No children in this list need a follow-up right now.',
+                  title: tr('All caught up'),
+                  message: tr('No children in this list need a follow-up right now.'),
                   icon: Icons.check_circle_outline_rounded,
                 );
               }
@@ -125,8 +126,8 @@ class CaseCard extends StatelessWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${a.childName} · ${ageLabel(a.ageMonths)}', style: t.titleMedium),
-            if (a.caregiverName != null) Text('Caregiver: ${a.caregiverName}', style: t.bodySmall),
-            Text('Checked ${DateFormat('d MMM yyyy').format(a.submittedAt)}',
+            if (a.caregiverName != null) Text(tr('Caregiver: {caregiverName}', {'caregiverName': a.caregiverName}), style: t.bodySmall),
+            Text(tr('Checked {when}', {'when': DateFormat('d MMM yyyy').format(a.submittedAt)}),
                 style: t.bodySmall),
             SizedBox(height: Space.s2),
             Wrap(spacing: Space.s2, runSpacing: Space.s2, children: [

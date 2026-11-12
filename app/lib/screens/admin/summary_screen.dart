@@ -8,6 +8,7 @@ import '../../theme/colors.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import 'admin_shell.dart';
+import '../../i18n/strings.dart';
 
 /// Usage summary over a date range (GET /admin/summary). All figures come from the API.
 class SummaryScreen extends StatefulWidget {
@@ -55,7 +56,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final t = Theme.of(context).textTheme;
     final df = DateFormat('d MMM yyyy');
     return Scaffold(
-      appBar: adminAppBar(context, 'Usage summary'),
+      appBar: adminAppBar(context, tr('Usage summary')),
       body: RefreshIndicator(
         color: context.hc.plum700,
         onRefresh: () async {
@@ -69,13 +70,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 onPressed: _pickRange,
                 icon: Icon(Icons.date_range_rounded),
                 label: Text(_range == null
-                    ? 'All time'
+                    ? tr('All time')
                     : '${df.format(_range!.start)} to ${df.format(_range!.end)}'),
               ),
             ),
             if (_range != null)
               IconButton(
-                tooltip: 'Show all time',
+                tooltip: tr('Show all time'),
                 onPressed: () => setState(() {
                   _range = null;
                   _load();
@@ -96,16 +97,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 crossAxisSpacing: Space.s3,
                 childAspectRatio: 1.6,
                 children: [
-                  _stat('Assessments completed', u.assessments),
-                  _stat('Flagged for CHW', u.flagged),
-                  _stat('Referred to facility', u.outcomes['refer_to_facility'] ?? 0),
-                  _stat('Reviewed, not concerning', u.outcomes['reviewed_not_concerning'] ?? 0),
-                  _stat('Could not reach', u.outcomes['unreachable'] ?? 0),
-                  _stat('Awaiting review now', u.awaiting),
+                  _stat(tr('Assessments completed'), u.assessments),
+                  _stat(tr('Flagged for CHW'), u.flagged),
+                  _stat(tr('Referred to facility'), u.outcomes['refer_to_facility'] ?? 0),
+                  _stat(tr('Reviewed, not concerning'), u.outcomes['reviewed_not_concerning'] ?? 0),
+                  _stat(tr('Could not reach'), u.outcomes['unreachable'] ?? 0),
+                  _stat(tr('Awaiting review now'), u.awaiting),
                 ],
               ),
               SizedBox(height: Space.s6),
-              Text('Assessments by risk level', style: t.titleLarge),
+              Text(tr('Assessments by risk level'), style: t.titleLarge),
               SizedBox(height: Space.s3),
               _Bars(values: {
                 'Low': u.byRisk['low'] ?? 0,
@@ -113,12 +114,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 'High': u.byRisk['high'] ?? 0,
               }),
               SizedBox(height: Space.s6),
-              Text('Active accounts', style: t.titleLarge),
+              Text(tr('Active accounts'), style: t.titleLarge),
               SizedBox(height: Space.s2),
-              Text('Caregivers: ${u.users['caregiver'] ?? 0}  ·  CHWs: ${u.users['chw'] ?? 0}'
-                  '  ·  Admins: ${u.users['admin'] ?? 0}', style: t.bodyMedium),
-              Text('Children registered: ${u.children}', style: t.bodyMedium),
-              Text('Unusual-answer flags: ${u.anomalies}', style: t.bodyMedium),
+              Text(tr('Caregivers: {caregivers}  ·  CHWs: {chws}  ·  Admins: {admins}', {'caregivers': u.users['caregiver'] ?? 0, 'chws': u.users['chw'] ?? 0, 'admins': u.users['admin'] ?? 0}), style: t.bodyMedium),
+              Text(tr('Children registered: {children}', {'children': u.children}), style: t.bodyMedium),
+              Text(tr('Unusual-answer flags: {anomalies}', {'anomalies': u.anomalies}), style: t.bodyMedium),
             ]),
           ),
         ]),

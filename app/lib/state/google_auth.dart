@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:google_sign_in/google_sign_in.dart';
 
 /// OAuth "Web application" client ID. The backend checks Google ID tokens against it
@@ -5,7 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 /// Override with --dart-define=GOOGLE_SERVER_CLIENT_ID=...
 const googleServerClientId = String.fromEnvironment(
   'GOOGLE_SERVER_CLIENT_ID',
-  defaultValue: '973454711610-50v84nus43ic19nb08dies3bf8f3vqmq.apps.googleusercontent.com',
+  defaultValue: '973454711610-ti2p6t4mvg87vc57geoiquje69i5fn7n.apps.googleusercontent.com',
 );
 
 /// The Google account chosen on the phone, and the ID token to send to the backend.
@@ -41,6 +42,8 @@ class GoogleAuth {
           e.code == GoogleSignInExceptionCode.interrupted) {
         throw GoogleSignInCancelled();
       }
+      // The person sees a plain message; the real cause goes to the debug log.
+      debugPrint('HATUA_GOOGLE sign-in failed: ${e.code} ${e.description} ${e.details}');
       throw Exception('Google sign-in did not work. Please try again or use your phone number.');
     }
     final idToken = account.authentication.idToken;

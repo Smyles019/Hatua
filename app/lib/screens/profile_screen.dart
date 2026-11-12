@@ -12,16 +12,11 @@ import 'caregiver/add_child_screen.dart';
 import 'caregiver/caregiver_data.dart';
 import 'caregiver/child_profile_screen.dart';
 import 'chw/chw_profile_section.dart';
+import '../i18n/strings.dart';
 
 /// Profile and settings, shared by all three roles.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
-
-  static const _roleNames = {
-    'caregiver': 'Parent or caregiver',
-    'chw': 'Community health worker',
-    'admin': 'Administrator',
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +26,7 @@ class ProfileScreen extends StatelessWidget {
     if (user == null) return SizedBox.shrink();
 
     return Scaffold(
-      appBar: AppBar(title: Text('Profile')),
+      appBar: AppBar(title: Text(tr('Profile'))),
       body: ListView(padding: EdgeInsets.all(Space.s4), children: [
         HatuaCard(
           padding: EdgeInsets.all(Space.s6),
@@ -43,14 +38,6 @@ class ProfileScreen extends StatelessWidget {
             Text(user.fullName, style: t.headlineSmall, textAlign: TextAlign.center),
             SizedBox(height: Space.s1),
             Text(user.email ?? user.phoneNumber, style: t.bodySmall),
-            SizedBox(height: Space.s2),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: Space.s3, vertical: Space.s1),
-              decoration: BoxDecoration(
-                  color: context.hc.sun100, borderRadius: BorderRadius.circular(999)),
-              child: Text(_roleNames[user.role] ?? user.role,
-                  style: t.labelMedium?.copyWith(color: context.hc.onBright)),
-            ),
           ]),
         ),
         if (user.role == 'chw') ...[
@@ -68,10 +55,8 @@ class ProfileScreen extends StatelessWidget {
               Expanded(
                 child: Text(
                   user.linkedChwId == null
-                      ? 'You are not linked to a community health worker yet. Ask your '
-                          'CHW to link you using your phone number.'
-                      : 'You are linked to a community health worker. They will see results '
-                          'that need follow-up.',
+                      ? tr('You are not linked to a community health worker yet. Ask your CHW to link you using your phone number.')
+                      : tr('You are linked to a community health worker. They will see results that need follow-up.'),
                   style: t.bodyMedium,
                 ),
               ),
@@ -82,17 +67,34 @@ class ProfileScreen extends StatelessWidget {
         HatuaCard(
           padding: EdgeInsets.zero,
           child: Column(children: [
-            ListTile(
-              minTileHeight: Space.touch + 8,
-              leading: Icon(Icons.translate_rounded, color: context.hc.plum900),
-              title: Text('Language', style: t.bodyMedium),
-              trailing: Text('English', style: t.bodySmall),
+            // Label on one line, the two choices full width below, so "Kiswahili" never wraps.
+            Padding(
+              padding: EdgeInsets.fromLTRB(Space.s4, Space.s3, Space.s4, Space.s3),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Row(children: [
+                  Icon(Icons.translate_rounded, color: context.hc.plum900),
+                  SizedBox(width: Space.s4),
+                  Text(tr('Language'), style: t.bodyMedium),
+                ]),
+                SizedBox(height: Space.s2),
+                // Each language is named in itself, so either reader recognises theirs.
+                SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: 'en', label: Text('English')),
+                    ButtonSegment(value: 'sw', label: Text('Kiswahili')),
+                  ],
+                  selected: {context.watch<LanguageController>().language},
+                  onSelectionChanged: (s) =>
+                      context.read<LanguageController>().choose(s.first, api: session.api),
+                ),
+              ]),
             ),
             Divider(height: 1, indent: Space.s4, endIndent: Space.s4),
             SwitchListTile(
               minTileHeight: Space.touch + 8,
               secondary: Icon(Icons.dark_mode_outlined, color: context.hc.plum900),
-              title: Text('Dark mode', style: t.bodyMedium),
+              title: Text(tr('Dark mode'), style: t.bodyMedium),
               value: Theme.of(context).brightness == Brightness.dark,
               onChanged: (_) =>
                   context.read<ThemeController>().toggle(Theme.of(context).brightness),
@@ -101,7 +103,7 @@ class ProfileScreen extends StatelessWidget {
             ListTile(
               minTileHeight: Space.touch + 8,
               leading: Icon(Icons.lock_outline_rounded, color: context.hc.plum900),
-              title: Text('Change password', style: t.bodyMedium),
+              title: Text(tr('Change password'), style: t.bodyMedium),
               trailing: Icon(Icons.chevron_right_rounded, color: context.hc.plum900),
               onTap: () => showDialog(context: context, builder: (_) => const _PasswordDialog()),
             ),
@@ -109,13 +111,11 @@ class ProfileScreen extends StatelessWidget {
             ListTile(
               minTileHeight: Space.touch + 8,
               leading: Icon(Icons.logout_rounded, color: context.hc.plum900),
-              title: Text('Sign out', style: t.bodyMedium),
+              title: Text(tr('Sign out'), style: t.bodyMedium),
               onTap: () => context.read<Session>().signOut(),
             ),
           ]),
         ),
-        SizedBox(height: Space.s4),
-        Text('Swahili is coming in a later version.', style: t.bodySmall),
       ]),
     );
   }
@@ -148,12 +148,12 @@ class _ChildrenSectionState extends State<_ChildrenSection> {
         final checks = items.fold<int>(0, (n, i) => n + i.checks.length);
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            Expanded(child: _Stat(value: '${items.length}', label: 'Children')),
+            Expanded(child: _Stat(value: '${items.length}', label: tr('Children'))),
             SizedBox(width: Space.s3),
-            Expanded(child: _Stat(value: '$checks', label: 'Checks done')),
+            Expanded(child: _Stat(value: '$checks', label: tr('Checks done'))),
           ]),
           SizedBox(height: Space.s4),
-          Text('Children in your care', style: t.titleLarge),
+          Text(tr('Children in your care'), style: t.titleLarge),
           SizedBox(height: Space.s3),
           for (final i in items) ...[
             HatuaCard(
@@ -166,9 +166,14 @@ class _ChildrenSectionState extends State<_ChildrenSection> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(i.child.firstName, style: t.titleMedium),
                     Text(ageLabel(i.child.ageMonths), style: t.bodySmall),
+                    // Under the name, not beside it, so a long label (Swahili) never
+                    // squeezes the name.
+                    if (i.latest != null) ...[
+                      SizedBox(height: Space.s1),
+                      RiskChip.risk(i.latest!.riskLevel),
+                    ],
                   ]),
                 ),
-                if (i.latest != null) RiskChip.risk(i.latest!.riskLevel),
                 Icon(Icons.chevron_right_rounded, color: context.hc.plum900),
               ]),
             ),
@@ -179,7 +184,7 @@ class _ChildrenSectionState extends State<_ChildrenSection> {
             onPressed: () => Navigator.of(context)
                 .push(MaterialPageRoute(builder: (_) => const AddChildScreen())),
             icon: Icon(Icons.add_rounded),
-            label: Text('Add another child'),
+            label: Text(tr('Add another child')),
           ),
         ]);
       },
@@ -235,7 +240,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
           .put('/auth/password', {'current_password': _current.text, 'new_password': _new.text});
       if (mounted) {
         Navigator.of(context).pop();
-        showMessage(context, 'Your password was changed.');
+        showMessage(context, tr('Your password was changed.'));
       }
     } catch (e) {
       if (mounted) showError(context, e);
@@ -247,18 +252,18 @@ class _PasswordDialogState extends State<_PasswordDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Change password'),
+      title: Text(tr('Change password')),
       content: Form(
         key: _form,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           LabeledField(
-              label: 'Current password',
+              label: tr('Current password'),
               controller: _current,
               obscure: true,
-              validator: (v) => requiredField(v, 'your current password')),
+              validator: (v) => requiredField(v, tr('your current password'))),
           SizedBox(height: Space.s3),
           LabeledField(
-              label: 'New password',
+              label: tr('New password'),
               controller: _new,
               obscure: true,
               textInputAction: TextInputAction.done,
@@ -266,8 +271,8 @@ class _PasswordDialogState extends State<_PasswordDialog> {
         ]),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-        TextButton(onPressed: _busy ? null : _save, child: Text('Save')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel'))),
+        TextButton(onPressed: _busy ? null : _save, child: Text(tr('Save'))),
       ],
     );
   }

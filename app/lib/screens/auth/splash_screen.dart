@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/colors.dart';
 import '../../widgets/sprout.dart';
+import '../../i18n/strings.dart';
 
 /// Full-bleed plum splash with bleeding circles, shown while the session restores.
 class SplashScreen extends StatelessWidget {
@@ -21,10 +22,10 @@ class SplashScreen extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Sprout(pose: SproutPose.waving, size: 140),
             SizedBox(height: 8),
-            Text('Hatua',
+            Text(tr('Hatua'),
                 style: t.displaySmall?.copyWith(color: context.hc.onHeader, fontSize: 48)),
             SizedBox(height: 8),
-            Text('Growing well, step by step',
+            Text(tr('Growing well, step by step'),
                 style: t.bodyMedium?.copyWith(color: context.hc.onHeader)),
           ]),
         ),

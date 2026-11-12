@@ -9,6 +9,7 @@ import 'chw_data.dart';
 import 'chw_home_tab.dart';
 import 'flagged_screen.dart';
 import 'outcomes_tab.dart';
+import '../../i18n/strings.dart';
 
 class ChwShell extends StatefulWidget {
   const ChwShell({super.key});
@@ -41,12 +42,12 @@ class _ChwShellState extends State<ChwShell> {
     }
     return NavShell(
       tabs: [
-        NavTab('Home', Icons.home_outlined, (_) => ChwHomeTab()),
-        NavTab('Caregivers', Icons.people_outline_rounded, (_) => CaregiversTab()),
-        NavTab('Outcomes', Icons.fact_check_outlined, (_) => OutcomesTab()),
-        NavTab('Profile', Icons.person_outline_rounded, (_) => ProfileScreen()),
+        NavTab(tr('Home'), Icons.home_outlined, (_) => ChwHomeTab()),
+        NavTab(tr('Caregivers'), Icons.people_outline_rounded, (_) => CaregiversTab()),
+        NavTab(tr('Outcomes'), Icons.fact_check_outlined, (_) => OutcomesTab()),
+        NavTab(tr('Profile'), Icons.person_outline_rounded, (_) => ProfileScreen()),
       ],
-      centreLabel: 'Flagged',
+      centreLabel: tr('Flagged'),
       centreIcon: Icons.flag_outlined,
       centreBadge: _open,
       onCentre: (ctx) => Navigator.of(ctx)

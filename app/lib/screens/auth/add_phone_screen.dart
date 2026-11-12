@@ -8,6 +8,7 @@ import '../../theme/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/google_button.dart';
 import '../../widgets/sprout.dart';
+import '../../i18n/strings.dart';
 
 /// Shown once, after the first Google sign-in. The account is created only when the
 /// phone number is added: CHWs find and link caregivers by phone.
@@ -50,18 +51,18 @@ class _AddPhoneScreenState extends State<AddPhoneScreen> {
     final t = Theme.of(context).textTheme;
     final c = context.hc;
     return Scaffold(
-      appBar: AppBar(title: const Text('Add your phone number')),
+      appBar: AppBar(title: Text(tr('Add your phone number'))),
       body: Form(
         key: _form,
         child: ListView(padding: const EdgeInsets.all(Space.s4), children: [
           const Center(child: Sprout(pose: SproutPose.waving, size: 110)),
           const SizedBox(height: Space.s3),
-          Text('One more step', style: t.headlineSmall, textAlign: TextAlign.center),
+          Text(tr('One more step'), style: t.headlineSmall, textAlign: TextAlign.center),
           const SizedBox(height: Space.s1),
-          Text('Add your phone number so your community health worker can link to you.',
+          Text(tr('Add your phone number so your community health worker can link to you.'),
               style: t.bodyMedium, textAlign: TextAlign.center),
           const SizedBox(height: Space.s6),
-          Text('GOOGLE ACCOUNT', style: t.labelMedium),
+          Text(tr('GOOGLE ACCOUNT'), style: t.labelMedium),
           const SizedBox(height: Space.s1),
           HatuaCard(
             child: Row(children: [
@@ -78,7 +79,7 @@ class _AddPhoneScreenState extends State<AddPhoneScreen> {
           ),
           const SizedBox(height: Space.s4),
           LabeledField(
-            label: 'Phone number',
+            label: tr('Phone number'),
             controller: _phone,
             hint: '0712 345 678',
             icon: Icons.phone_android_rounded,
@@ -89,12 +90,11 @@ class _AddPhoneScreenState extends State<AddPhoneScreen> {
           const SizedBox(height: Space.s6),
           FilledButton(
             onPressed: _busy ? null : _submit,
-            child: Text(_busy ? 'Creating your account...' : 'Continue'),
+            child: Text(_busy ? tr('Creating your account...') : tr('Continue')),
           ),
           const SizedBox(height: Space.s3),
           Text(
-            'Already have a Hatua account with this number? Go back and sign in with your '
-            'phone number and password.',
+            tr('Already have a Hatua account with this number? Go back and sign in with your phone number and password.'),
             style: t.bodySmall,
             textAlign: TextAlign.center,
           ),

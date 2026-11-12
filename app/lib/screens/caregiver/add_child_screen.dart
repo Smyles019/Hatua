@@ -9,6 +9,7 @@ import '../../theme/theme.dart';
 import '../../widgets/child_avatar.dart';
 import '../../widgets/common.dart';
 import '../../widgets/sprout.dart';
+import '../../i18n/strings.dart';
 
 /// Adds a child under five in four short steps: name, birthday and sex, growth (optional),
 /// then an animal avatar. A caregiver adds their own; a CHW passes [caregiverId] for a
@@ -33,6 +34,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
   DateTime? _dobValue;
   String? _sex;
   String _avatar = avatarIds.first;
+  Set<String> _careFactors = {};
   int _step = 0;
   bool _busy = false;
   Child? _saved; // set once saved: shows the "profile ready" view
@@ -46,7 +48,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
     super.dispose();
   }
 
-  String get _childName => _name.text.trim().isEmpty ? 'your child' : _name.text.trim();
+  String get _childName => _name.text.trim().isEmpty ? tr('your child') : _name.text.trim();
 
   Future<void> _pickDob() async {
     final now = DateTime.now();
@@ -56,7 +58,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
       // Under five only: 0 to 59 months.
       firstDate: DateTime(now.year - 5, now.month, now.day + 1),
       lastDate: now,
-      helpText: "Child's date of birth",
+      helpText: tr("Child's date of birth"),
     );
     if (picked != null) {
       setState(() {
@@ -69,7 +71,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
   void _next() {
     if (!_forms[_step].currentState!.validate()) return;
     if (_step == 1 && _sex == null) {
-      showMessage(context, 'Please choose girl or boy.');
+      showMessage(context, tr('Please choose girl or boy.'));
       return;
     }
     if (_step < _steps - 1) {
@@ -100,6 +102,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
         'sex': _sex,
         'location': _location.text.trim(),
         'avatar_id': _avatar,
+        'care_factors': _careFactors.toList(),
       });
       var child = Child.fromJson(data as Map<String, dynamic>);
       final w = _num(_weight), h = _num(_height);
@@ -125,6 +128,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
       _dobValue = null;
       _sex = null;
       _avatar = avatarIds.first;
+      _careFactors = {};
       _step = 0;
       _saved = null;
     });
@@ -143,10 +147,10 @@ class _AddChildScreenState extends State<AddChildScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(widget.caregiverName == null
-              ? 'Add a child'
-              : 'Add a child for ${widget.caregiverName}'),
+              ? tr('Add a child')
+              : tr('Add a child for {caregiverName}', {'caregiverName': widget.caregiverName})),
           leading: IconButton(
-              tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded), onPressed: _back),
+              tooltip: tr('Back'), icon: const Icon(Icons.arrow_back_rounded), onPressed: _back),
         ),
         body: SafeArea(
           child: Column(children: [
@@ -154,9 +158,9 @@ class _AddChildScreenState extends State<AddChildScreen> {
               padding: const EdgeInsets.fromLTRB(Space.s4, Space.s2, Space.s4, 0),
               child: Column(children: [
                 Row(children: [
-                  Text('STEP ${_step + 1} OF $_steps', style: t.labelMedium),
+                  Text(tr('STEP {step} OF {steps}', {'step': _step + 1, 'steps': _steps}), style: t.labelMedium),
                   const Spacer(),
-                  Text(const ['Name', 'About', 'Growth', 'Avatar'][_step], style: t.bodySmall),
+                  Text([tr('Name'), tr('About'), tr('Growth'), tr('Avatar')][_step], style: t.bodySmall),
                 ]),
                 const SizedBox(height: Space.s2),
                 ClipRRect(
@@ -185,19 +189,20 @@ class _AddChildScreenState extends State<AddChildScreen> {
                 FilledButton(
                   onPressed: _busy ? null : _next,
                   child: Text(_busy
-                      ? 'Saving...'
+                      ? tr('Saving...')
                       : _step == _steps - 1
-                          ? 'Save profile'
-                          : 'Next'),
+                          ? tr('Save profile')
+                          : tr('Next')),
                 ),
                 if (_step == 2)
                   TextButton(
                     onPressed: () {
                       _weight.clear();
                       _height.clear();
+                      _careFactors = {};
                       setState(() => _step++);
                     },
-                    child: const Text('Skip for now'),
+                    child: Text(tr('Skip for now')),
                   ),
               ]),
             ),
@@ -220,62 +225,61 @@ class _AddChildScreenState extends State<AddChildScreen> {
   }
 
   List<Widget> _nameStep(BuildContext context) => [
-        _title(context, 'New sprout', "What is your child's name?",
-            'We use it to make the questions and results feel personal.'),
+        _title(context, tr('New sprout'), tr("What is your child's name?"),
+            tr('We use it to make the questions and results feel personal.')),
         LabeledField(
-          label: "Child's first name",
+          label: tr("Child's first name"),
           controller: _name,
-          hint: 'Wanjiru',
+          hint: tr('Wanjiru'),
           icon: Icons.child_care_rounded,
           textInputAction: TextInputAction.done,
-          validator: (v) => requiredField(v, "the child's name"),
+          validator: (v) => requiredField(v, tr("the child's name")),
         ),
         const SizedBox(height: Space.s4),
-        const _TipCard(
-          title: 'Did you know?',
-          body: 'Hearing their own name often helps babies learn to turn and respond '
-              'when someone calls them.',
+        _TipCard(
+          title: tr('Did you know?'),
+          body: tr('Hearing their own name often helps babies learn to turn and respond when someone calls them.'),
         ),
       ];
 
   List<Widget> _aboutStep(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return [
-      _title(context, 'About $_childName', 'Tell us a bit more about $_childName',
-          'Age decides which questions we ask at each check.'),
+      _title(context, tr('About {_childName}', {'_childName': _childName}), tr('Tell us a bit more about {_childName}', {'_childName': _childName}),
+          tr('Age decides which questions we ask at each check.')),
       LabeledField(
-        label: 'Date of birth',
+        label: tr('Date of birth'),
         controller: _dob,
-        hint: 'Choose a date',
+        hint: tr('Choose a date'),
         icon: Icons.calendar_today_rounded,
         readOnly: true,
         onTap: _pickDob,
-        validator: (_) => _dobValue == null ? 'Please choose the date of birth' : null,
+        validator: (_) => _dobValue == null ? tr('Please choose the date of birth') : null,
       ),
       const SizedBox(height: Space.s4),
-      Text('SEX', style: t.labelMedium),
+      Text(tr('SEX'), style: t.labelMedium),
       const SizedBox(height: Space.s1),
       Row(children: [
         Expanded(
           child: ChoiceOption(
-              label: 'Girl',
+              label: tr('Girl'),
               selected: _sex == 'female',
               onTap: () => setState(() => _sex = 'female')),
         ),
         const SizedBox(width: Space.s3),
         Expanded(
           child: ChoiceOption(
-              label: 'Boy', selected: _sex == 'male', onTap: () => setState(() => _sex = 'male')),
+              label: tr('Boy'), selected: _sex == 'male', onTap: () => setState(() => _sex = 'male')),
         ),
       ]),
       const SizedBox(height: Space.s4),
       LabeledField(
-        label: 'Where you live',
+        label: tr('Where you live'),
         controller: _location,
-        hint: 'Village, estate or ward',
+        hint: tr('Village, estate or ward'),
         icon: Icons.place_outlined,
         textInputAction: TextInputAction.done,
-        validator: (v) => requiredField(v, 'where you live'),
+        validator: (v) => requiredField(v, tr('where you live')),
       ),
     ];
   }
@@ -284,44 +288,52 @@ class _AddChildScreenState extends State<AddChildScreen> {
     String? range(String? v, double lo, double hi, String what) {
       if (v == null || v.trim().isEmpty) return null; // optional
       final n = double.tryParse(v.trim().replaceAll(',', '.'));
-      return (n == null || n < lo || n > hi) ? 'Enter $what between $lo and $hi' : null;
+      return (n == null || n < lo || n > hi) ? tr('Enter {what} between {lo} and {hi}', {'what': what, 'lo': lo, 'hi': hi}) : null;
     }
 
     return [
-      _title(context, 'Growth', "$_childName's weight and height",
-          'Copy them from the Mother and Child Health booklet after a clinic visit. '
-              'You can skip this and add them later.'),
+      _title(context, tr('Growth'), "$_childName's weight and height",
+          tr('Copy them from the Mother and Child Health booklet after a clinic visit. You can skip this and add them later.')),
       LabeledField(
-        label: 'Weight (kg)',
+        label: tr('Weight (kg)'),
         controller: _weight,
-        hint: 'For example 9.4',
+        hint: tr('For example 9.4'),
         icon: Icons.monitor_weight_outlined,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        validator: (v) => range(v, 1, 35, 'a weight'),
+        validator: (v) => range(v, 1, 35, tr('a weight')),
       ),
       const SizedBox(height: Space.s3),
       LabeledField(
-        label: 'Height or length (cm)',
+        label: tr('Height or length (cm)'),
         controller: _height,
-        hint: 'For example 76',
+        hint: tr('For example 76'),
         icon: Icons.straighten_rounded,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textInputAction: TextInputAction.done,
-        validator: (v) => range(v, 40, 130, 'a height'),
+        validator: (v) => range(v, 40, 130, tr('a height')),
       ),
+      const SizedBox(height: Space.s6),
+      // Reasons for special care, as ticked in the Mother and Child Health booklet.
+      Text(tr('DOES ANY OF THIS APPLY TO {name}?', {'name': _childName.toUpperCase()}),
+          style: Theme.of(context).textTheme.labelMedium),
+      const SizedBox(height: Space.s1),
+      Text(tr('Tick any that apply. Your health worker sees them; it is fine to leave all blank.'),
+          style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: Space.s2),
+      CareFactorChecks(
+          selected: _careFactors,
+          onChanged: (f) => setState(() => _careFactors = f)),
       const SizedBox(height: Space.s4),
-      const _TipCard(
-        title: 'Why we ask',
-        body: 'Growth and development go together. Regular entries build a growth record '
-            'you can show at the clinic.',
+      _TipCard(
+        title: tr('Why we ask'),
+        body: tr('Growth and development go together. Regular entries build a growth record you can show at the clinic.'),
       ),
     ];
   }
 
   List<Widget> _avatarStep(BuildContext context) => [
-        _title(context, 'Almost done', 'Pick an animal for $_childName',
-            'It shows wherever $_childName appears in the app. We never ask for photos '
-                'of children.'),
+        _title(context, tr('Almost done'), tr('Pick an animal for {_childName}', {'_childName': _childName}),
+            tr('It shows wherever {_childName} appears in the app. We never ask for photos of children.', {'_childName': _childName})),
         Center(child: AnimalAvatar(_avatar, size: 112)),
         const SizedBox(height: Space.s6),
         AvatarPicker(selected: _avatar, onPick: (id) => setState(() => _avatar = id)),
@@ -333,7 +345,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
       body: SafeArea(
         child: ListView(padding: const EdgeInsets.all(Space.s4), children: [
           const SizedBox(height: Space.s6),
-          const Center(child: _Pill('Profile created')),
+          Center(child: _Pill(tr('Profile created'))),
           const SizedBox(height: Space.s4),
           HatuaCard(
             padding: const EdgeInsets.all(Space.s6),
@@ -342,11 +354,11 @@ class _AddChildScreenState extends State<AddChildScreen> {
               const SizedBox(height: Space.s3),
               _Pill(ageLabel(child.ageMonths)),
               const SizedBox(height: Space.s3),
-              Text("${child.firstName}'s profile is ready!",
+              Text(tr("{firstName}'s profile is ready!", {'firstName': child.firstName}),
                   style: t.headlineSmall, textAlign: TextAlign.center),
               const SizedBox(height: Space.s2),
               Text(
-                "The questions at each check will match ${child.firstName}'s age.",
+                tr("The questions at each check will match {firstName}'s age.", {'firstName': child.firstName}),
                 style: t.bodyMedium?.copyWith(color: context.hc.muted),
                 textAlign: TextAlign.center,
               ),
@@ -360,9 +372,9 @@ class _AddChildScreenState extends State<AddChildScreen> {
               const SizedBox(width: Space.s3),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Do you have another child to track?', style: t.titleMedium),
+                  Text(tr('Do you have another child to track?'), style: t.titleMedium),
                   const SizedBox(height: Space.s1),
-                  Text('Add every child under five to follow them separately.',
+                  Text(tr('Add every child under five to follow them separately.'),
                       style: t.bodySmall),
                 ]),
               ),
@@ -371,14 +383,14 @@ class _AddChildScreenState extends State<AddChildScreen> {
           const SizedBox(height: Space.s6),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Continue to home'),
+            child: Text(tr('Continue to home')),
           ),
           const SizedBox(height: Space.s2),
           FilledButton.icon(
             style: secondaryButtonStyle(context),
             onPressed: _addAnother,
             icon: const Icon(Icons.add_rounded),
-            label: const Text('Add another child'),
+            label: Text(tr('Add another child')),
           ),
         ]),
       ),
@@ -398,7 +410,7 @@ class _Pill extends StatelessWidget {
       decoration: BoxDecoration(
           color: context.hc.sun100, borderRadius: BorderRadius.circular(999)),
       child: Text(text,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(color: context.hc.onBright)),
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(color: context.hc.plum900)),
     );
   }
 }
@@ -414,13 +426,13 @@ class _TipCard extends StatelessWidget {
     return HatuaCard(
       color: context.hc.sun100,
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(Icons.lightbulb_outline_rounded, color: context.hc.onBright),
+        Icon(Icons.lightbulb_outline_rounded, color: context.hc.plum900),
         const SizedBox(width: Space.s3),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: t.labelLarge?.copyWith(color: context.hc.onBright)),
+            Text(title, style: t.labelLarge?.copyWith(color: context.hc.plum900)),
             const SizedBox(height: Space.s1),
-            Text(body, style: t.bodySmall?.copyWith(color: context.hc.onBright)),
+            Text(body, style: t.bodySmall?.copyWith(color: context.hc.plum900)),
           ]),
         ),
       ]),

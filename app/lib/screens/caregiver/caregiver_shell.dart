@@ -13,6 +13,7 @@ import 'check_screen.dart';
 import 'children_tab.dart';
 import 'history_tab.dart';
 import 'home_tab.dart';
+import '../../i18n/strings.dart';
 
 class CaregiverShell extends StatelessWidget {
   const CaregiverShell({super.key});
@@ -21,12 +22,12 @@ class CaregiverShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return NavShell(
       tabs: [
-        NavTab('Home', Icons.home_outlined, (_) => CaregiverHomeTab()),
-        NavTab('Children', Icons.child_care_rounded, (_) => ChildrenTab()),
-        NavTab('History', Icons.history_rounded, (_) => HistoryTab()),
-        NavTab('Profile', Icons.person_outline_rounded, (_) => ProfileScreen()),
+        NavTab(tr('Home'), Icons.home_outlined, (_) => CaregiverHomeTab()),
+        NavTab(tr('Children'), Icons.child_care_rounded, (_) => ChildrenTab()),
+        NavTab(tr('History'), Icons.history_rounded, (_) => HistoryTab()),
+        NavTab(tr('Profile'), Icons.person_outline_rounded, (_) => ProfileScreen()),
       ],
-      centreLabel: 'Start check',
+      centreLabel: tr('Start check'),
       centreIcon: Icons.add_rounded,
       onCentre: startCheck,
     );
@@ -50,7 +51,7 @@ Future<void> startCheck(BuildContext context, {Child? child}) async {
   }
   if (!context.mounted) return;
   if (children.isEmpty) {
-    showMessage(context, 'Add a child first, then start a check.');
+    showMessage(context, tr('Add a child first, then start a check.'));
     await Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const AddChildScreen()));
     return;
@@ -64,7 +65,7 @@ Future<void> startCheck(BuildContext context, {Child? child}) async {
     showDragHandle: true,
     builder: (ctx) => SafeArea(
       child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(Space.s4), children: [
-        Text('Which child are you checking?', style: Theme.of(ctx).textTheme.titleLarge),
+        Text(tr('Which child are you checking?'), style: Theme.of(ctx).textTheme.titleLarge),
         const SizedBox(height: Space.s3),
         for (final c in children)
           Padding(

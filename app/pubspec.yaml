@@ -26,3 +26,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/avatars/
+    # Swahili lines, copied from i18n/sw.json by i18n/tools/sync_app.py.
+    - assets/i18n/
