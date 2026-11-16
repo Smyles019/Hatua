@@ -78,6 +78,11 @@ class UserOut(BaseModel):
     invite_pending: bool = False
 
 
+class PushToken(BaseModel):
+    """A phone's Firebase Cloud Messaging registration token."""
+    token: str = Field(min_length=20, max_length=4096)
+
+
 class Preferences(BaseModel):
     """What a signed-in person may change about their own account."""
     language: Language

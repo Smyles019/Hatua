@@ -7,7 +7,7 @@ same endpoints serve both age ranges: 24 to 59 months go through the trained mod
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -15,7 +15,7 @@ from app.api.deps import get_child, require
 from app.db.models import CaregiverInput, MilestoneSummary, PredictionResult, User
 from app.db.session import get_db
 from app.schemas.assessment import AssessmentIn, AssessmentOut
-from app.services import inference
+from app.services import inference, notify
 from app.services.growth import growth_flags, latest_z_scores
 from app.services.questions import (code, questionnaire, raised_red_flags, red_flag_items,
                                     red_flag_questions)
@@ -52,7 +52,8 @@ def questions(child_id: uuid.UUID, user: User = Depends(caregiver), db: Session 
 
 
 @router.post("", response_model=AssessmentOut, status_code=201)
-def submit(body: AssessmentIn, user: User = Depends(caregiver), db: Session = Depends(get_db)):
+def submit(body: AssessmentIn, bg: BackgroundTasks, user: User = Depends(caregiver),
+           db: Session = Depends(get_db)):
     child = get_child(body.child_id, user, db)
     age = age_in_months(child.date_of_birth)
     items = _items(age)
@@ -104,4 +105,5 @@ def submit(body: AssessmentIn, user: User = Depends(caregiver), db: Session = De
         summary.domain_status = {**summary.domain_status, **status}
     db.commit()
     db.refresh(inp)
+    notify.flagged_check(bg, db, user, child, pred)  # to the CHW, if it goes to them
     return to_out(pred, inp, child, user.language)

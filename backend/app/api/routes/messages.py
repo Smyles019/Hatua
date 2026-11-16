@@ -10,7 +10,7 @@ The app shows the danger signs before a question is sent: this is not for emerge
 """
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.api.deps import require
 from app.db.models import CaregiverInput, Child, Message, PredictionResult, User
 from app.db.session import get_db
 from app.schemas.assessment import MessageIn
+from app.services import notify
 
 router = APIRouter()
 caregiver_only = require("caregiver")
@@ -71,7 +72,8 @@ def my_thread(user: User = Depends(caregiver_only), db: Session = Depends(get_db
 
 
 @router.post("", status_code=201)
-def ask(body: MessageIn, user: User = Depends(caregiver_only), db: Session = Depends(get_db)):
+def ask(body: MessageIn, bg: BackgroundTasks, user: User = Depends(caregiver_only),
+        db: Session = Depends(get_db)):
     if not body.body.strip():
         raise HTTPException(422, "write your question first")
     if body.prediction_id is not None:
@@ -83,6 +85,7 @@ def ask(body: MessageIn, user: User = Depends(caregiver_only), db: Session = Dep
         if owner != user.user_id:
             raise HTTPException(404, "check not found")
     _add(db, user, user, body.body, body.prediction_id)
+    notify.new_question(bg, db, user)
     return _thread(db, user, user)
 
 
@@ -132,10 +135,11 @@ def thread(caregiver_id: uuid.UUID, user: User = Depends(chw_only),
 
 
 @router.post("/threads/{caregiver_id}", status_code=201)
-def reply(caregiver_id: uuid.UUID, body: MessageIn, user: User = Depends(chw_only),
-          db: Session = Depends(get_db)):
+def reply(caregiver_id: uuid.UUID, body: MessageIn, bg: BackgroundTasks,
+          user: User = Depends(chw_only), db: Session = Depends(get_db)):
     caregiver = _linked(db, caregiver_id, user)
     if not body.body.strip():
         raise HTTPException(422, "write your reply first")
     _add(db, caregiver, user, body.body)
+    notify.chw_replied(bg, caregiver)
     return _thread(db, caregiver, user)

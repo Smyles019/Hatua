@@ -2,6 +2,7 @@
 
     python -m app.cli create-admin --name "Jane Admin" --email jane@example.com --phone 0712345678
     python -m app.cli add-test-emails
+    python -m app.cli send-reminders     (daily, from the server's timer)
 
 create-admin prompts for the password, so it never appears in the shell history. The
 first administrator has to be created this way; after that, administrators create other
@@ -66,7 +67,15 @@ def main(argv=None) -> int:
     p.add_argument("--phone", required=True)
     sub.add_parser("add-test-emails",
                    help="development: give accounts without an email a placeholder one")
+    sub.add_parser("send-reminders",
+                   help="push 'time for a check' to caregivers whose child reached a new "
+                        "age band with no check yet (run once a day)")
     args = parser.parse_args(argv)
+
+    if args.command == "send-reminders":
+        from app.services.notify import send_check_reminders
+        print(f"{send_check_reminders(SessionLocal)} reminder(s) sent")
+        return 0
 
     if args.command == "add-test-emails":
         done = add_test_emails()

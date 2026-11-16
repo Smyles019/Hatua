@@ -28,13 +28,14 @@ from app.api.deps import current_user
 from app.core import mailer
 from app.core.config import settings
 from app.core.google import GoogleTokenError, verify_google_token
+from app.core.push import add_token
 from app.core.security import (create_access_token, create_link_token, hash_password,
                                link_still_matches, read_link_token, verify_password)
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.users import (EmailOnly, GoogleSignIn, Login, PasswordChange, Preferences,
-                               Register, Registered, Session as SessionOut, UserOut,
-                               email_address, kenyan_phone)
+                               PushToken, Register, Registered, Session as SessionOut,
+                               UserOut, email_address, kenyan_phone)
 
 router = APIRouter()
 
@@ -255,6 +256,30 @@ def update_me(body: Preferences, user: User = Depends(current_user),
     user.language = body.language
     db.commit()
     return user
+
+
+@router.put("/me/push-token", status_code=204)
+def register_push_token(body: PushToken, user: User = Depends(current_user),
+                        db: Session = Depends(get_db)):
+    """The app sends its notification token after sign-in and whenever it changes.
+
+    A phone belongs to whoever signed in on it last: the token is taken off any other
+    account first, so a shared phone never shows someone else's notifications."""
+    for other in db.scalars(select(User).where(
+            User.user_id != user.user_id,
+            User.push_tokens.contains([{"token": body.token}]))):
+        other.push_tokens = [t for t in other.push_tokens if t.get("token") != body.token]
+    user.push_tokens = add_token(user.push_tokens or [], body.token)
+    db.commit()
+
+
+@router.delete("/me/push-token", status_code=204)
+def remove_push_token(token: str, user: User = Depends(current_user),
+                      db: Session = Depends(get_db)):
+    """The app calls this on sign-out, so the phone stops getting this person's
+    notifications."""
+    user.push_tokens = [t for t in (user.push_tokens or []) if t.get("token") != token]
+    db.commit()
 
 
 @router.put("/password", status_code=204)

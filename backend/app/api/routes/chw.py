@@ -6,7 +6,7 @@ and the child's caregiver is linked to that CHW.
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.db.models import CaregiverInput, Child, PredictionResult, User
 from app.db.session import get_db
 from app.schemas.assessment import OutcomeIn
 from app.schemas.users import EnrolCaregiver, LinkByPhone, UserOut
+from app.services import notify
 from app.services.results import needs_chw, to_out
 
 router = APIRouter()
@@ -104,8 +105,8 @@ def cases(include_reviewed: bool = False, user: User = Depends(chw_only),
 
 
 @router.post("/cases/{prediction_id}/outcome")
-def record_outcome(prediction_id: uuid.UUID, body: OutcomeIn, user: User = Depends(chw_only),
-                   db: Session = Depends(get_db)):
+def record_outcome(prediction_id: uuid.UUID, body: OutcomeIn, bg: BackgroundTasks,
+                   user: User = Depends(chw_only), db: Session = Depends(get_db)):
     row = db.execute(select(PredictionResult, CaregiverInput, Child, User)
                      .join(CaregiverInput, PredictionResult.input_id == CaregiverInput.input_id)
                      .join(Child, CaregiverInput.child_id == Child.child_id)
@@ -113,11 +114,14 @@ def record_outcome(prediction_id: uuid.UUID, body: OutcomeIn, user: User = Depen
                      .where(PredictionResult.prediction_id == prediction_id)).first()
     if row is None or row[3].linked_chw_id != user.user_id:
         raise HTTPException(404, "case not found")  # same answer for someone else's case
-    pred, inp, child, _ = row
+    pred, inp, child, caregiver = row
     if not needs_chw(pred.risk_level, pred.anomaly_flag, pred.red_flags):
         raise HTTPException(409, "low-risk results without a flag are not CHW cases")
+    changed = pred.chw_outcome != body.outcome
     pred.chw_outcome = body.outcome
     pred.reviewed_by = user.user_id
     pred.reviewed_at = datetime.now(timezone.utc)
     db.commit()
+    if changed:  # saving the same outcome again tells the caregiver nothing new
+        notify.outcome_recorded(bg, caregiver, child, pred)
     return to_out(pred, inp, child, user.language)

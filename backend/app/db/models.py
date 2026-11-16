@@ -89,6 +89,10 @@ class User(Base):
     # waits, with no password, Google account or phone number, until the CHW opens the
     # link and sets a password, or signs in with Google using the invited email.
     invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Push notifications: Firebase Cloud Messaging tokens of this person's phones,
+    # newest last, [{"token", "updated_at"}] (see app.core.push).
+    push_tokens: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
+                                              default=list)
     created_at: Mapped[datetime] = _now()
 
     @property
@@ -121,6 +125,9 @@ class Child(Base):
     # the model.
     care_factors: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
                                                default=list)
+    # The age band ("12-17") the "time for a check" reminder was last sent for, so each
+    # band is reminded once (app.services.notify.send_check_reminders).
+    reminded_band: Mapped[str | None] = mapped_column(String(10))
     created_at: Mapped[datetime] = _now()
 
 

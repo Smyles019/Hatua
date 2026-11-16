@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     verify_link_hours: int = 48
     reset_link_minutes: int = 60
     invite_link_days: int = 7  # CHW invites; the administrator can send a new one
+    # Push notifications (Firebase Cloud Messaging): path to the Firebase service account
+    # key (JSON). Empty: nothing is sent; notifications are logged and kept in
+    # app.core.push.outbox instead, as emails are without SMTP.
+    firebase_credentials: str = ""
 
     @property
     def google_audiences(self) -> list[str]:
