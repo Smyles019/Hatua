@@ -12,6 +12,7 @@ import '../../widgets/common.dart';
 import '../../widgets/domain.dart';
 import '../../widgets/risk_chip.dart';
 import '../messages/thread_screen.dart';
+import 'check_report_screen.dart';
 import 'chw_data.dart';
 import '../../i18n/strings.dart';
 
@@ -169,6 +170,13 @@ class _CaseReviewScreenState extends State<CaseReviewScreen> {
               answers: a.answers),
           SizedBox(height: Space.s2),
         ],
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) =>
+                  CheckReportScreen(predictionId: a.predictionId, childName: a.childName))),
+          icon: Icon(Icons.description_outlined),
+          label: Text(tr('Full report: every question and answer')),
+        ),
         if (a.caregiverId != null) ...[
           SizedBox(height: Space.s2),
           OutlinedButton.icon(

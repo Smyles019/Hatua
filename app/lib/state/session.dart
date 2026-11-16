@@ -12,8 +12,14 @@ import 'outbox.dart';
 import 'pending_check.dart';
 import 'push.dart';
 
-/// A first Google sign-in: the account needs a phone number before it can be created.
-class NeedsPhone implements Exception {}
+/// A first Google sign-in: the account needs a phone number before it can be created
+/// (a new caregiver), or before it can be used (a CHW invited by an administrator).
+class NeedsPhone implements Exception {
+  NeedsPhone([this.role = 'caregiver']);
+
+  /// 'caregiver' or 'chw', from the server, so the phone step speaks to the right person.
+  final String role;
+}
 
 /// Email sign-in with the right password, but the email has not been confirmed yet.
 class NeedsVerification implements Exception {
@@ -324,7 +330,10 @@ class Session extends ChangeNotifier with WidgetsBindingObserver {
       });
       await _save(data as Map<String, dynamic>);
     } on ApiException catch (e) {
-      if (e.status == 428) throw NeedsPhone();
+      if (e.status == 428) {
+        final d = e.detail;
+        throw NeedsPhone(d is Map && d['role'] == 'chw' ? 'chw' : 'caregiver');
+      }
       rethrow;
     }
   }

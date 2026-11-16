@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_child, require
 from app.core.config import settings
-from app.db.models import AssistantMessage, User
+from app.db.models import AssistantMessage, Child, User
 from app.db.session import get_db
 from app.services import assistant
 from app.services.results import age_in_months
@@ -71,7 +71,11 @@ def ask(body: AssistantIn, user: User = Depends(caregiver_only), db: Session = D
             .limit(assistant.HISTORY)).all()][::-1]
         age = age_in_months(child.date_of_birth) if child else None
         try:
-            reply = assistant.ask(history, question, user.language, age)
+            # The names on the account (the caregiver's and their children's) are
+            # replaced before anything is sent, even when the caregiver types them.
+            names = [user.full_name, *db.scalars(select(Child.first_name)
+                                                 .where(Child.caregiver_id == user.user_id))]
+            reply = assistant.ask(history, question, user.language, age, names)
         except assistant.AssistantOff:
             raise HTTPException(503, "the assistant is not switched on yet")
         except assistant.AssistantFailed:

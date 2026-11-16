@@ -51,6 +51,19 @@ def test_phone_numbers_and_emails_never_leave_the_server(client, openai):
     assert assistant.redact("She is 14 months, 2 years") == "She is 14 months, 2 years"
 
 
+def test_names_on_the_account_never_leave_the_server(client, openai):
+    _, cg = register_caregiver(client, "Wanjiru Kamau")
+    add_child(client, cg, 14, name="Baraka")
+    client.post("/assistant", headers=cg,
+                json={"body": "I am wanjiru. BARAKA cries at night, what can Kamau do?"})
+    sent = str(openai.sent)
+    for name in ("Wanjiru", "wanjiru", "BARAKA", "Baraka", "Kamau"):
+        assert name not in sent, name
+    assert sent.count("[name]") >= 3
+    # Whole words only: a name inside another word is left alone
+    assert assistant.redact("Barakaland", ["Baraka"]) == "Barakaland"
+
+
 def test_a_passing_provider_error_is_tried_once_more(client, openai):
     _, cg = register_caregiver(client)
 

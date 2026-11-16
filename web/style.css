@@ -357,3 +357,6 @@ label.pick:has(input:focus-visible) { outline: 3px solid var(--sun-500); }
   .hero .wave, .hero::before, .hero::after { display: none; }
   .card, .numbers, .tile { box-shadow: none; border: 1px solid var(--plum-200); }
 }
+
+/* The CHW's full check report: answers that count as not yet, or need a look. */
+tr.flagged td { font-weight: 600; }

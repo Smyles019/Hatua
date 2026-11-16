@@ -8,6 +8,7 @@ pyjwt>=2.8             # access tokens (HS256)
 python-multipart>=0.0.9  # form sign-in behind the Authorize button in /docs
 google-auth>=2.29        # verifies Google sign-in ID tokens (app/core/google.py)
 requests>=2.31           # transport google-auth uses to fetch Google's signing keys
+fpdf2>=2.8               # the CHW's full check report as a PDF (app/services/report_pdf.py)
 pytest
 httpx
 

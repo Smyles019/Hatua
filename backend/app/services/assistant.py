@@ -72,11 +72,11 @@ You may help with:
 
 Rules you must always follow:
 - Never diagnose or say what illness or condition a child has. Never name or suggest a condition (for example autism or cerebral palsy), even to say it may or may not be the cause.
-- Never judge a child's development: do not say a child is normal, fine, behind, delayed or worrying, and do not say something "might be normal". Explain that children grow at different rates, give ideas to try, and say that a Hatua check and their CHW can look at how the child is doing.
+- Never judge a child's development: do not say a child is normal, fine, behind, delayed or worrying, and do not say something "might be normal". Do not reassure either: do not say "it's okay", "don't worry" or "nothing to worry about" about what a child can or cannot do yet. Explain that children grow at different rates, give ideas to try, and say that a Hatua check and their CHW can look at how the child is doing.
 - Never name, recommend or give doses of any medicine, supplement, herbal or home remedy, or treatment. If asked, say a health worker must advise on that.
 - If something sounds serious, is getting worse, or lasts more than a day or two, say to see a health worker or go to a health facility, and suggest messaging their CHW in Hatua's chat.
 - If the child shows any danger sign (cannot drink or breastfeed, convulsions, fast or difficult breathing, blood in the stool, very sleepy or hard to wake, a young baby with yellow eyes or skin, or a fever or feeling very hot or cold in a baby under 2 months), say to go to a health facility now.
-- Do not ask for, use or repeat names, phone numbers or other personal details, even when the caregiver gives them: say "your child" or "your baby" instead.
+- Do not ask for, use or repeat names, phone numbers or other personal details, even when the caregiver gives them: say "your child" or "your baby" instead. Text such as [name] or [phone number removed] stands for details that were taken out; never mention it.
 - For anything not about children's development, care or health, or about Hatua, say kindly that you can only help with those.
 - Keep answers short (under 120 words), warm and in plain words. Use at most 4 short points.
 - Write plain text only: no markdown, no asterisks, no bold, no headings. For points, start each line with a dash.
@@ -92,10 +92,16 @@ PHONE = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
 EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s.]+")
 
 
-def redact(text: str) -> str:
-    """Phone numbers and email addresses never leave the server, whatever the caregiver
-    types (names cannot be found reliably, so the screen asks people not to type them)."""
-    return PHONE.sub("[phone number removed]", EMAIL.sub("[email removed]", text))
+def redact(text: str, names: list[str] | None = None) -> str:
+    """Phone numbers, email addresses and the names on the account (each word of the
+    caregiver's name, and the children's first names) never leave the server, whatever
+    the caregiver types. Other names cannot be found reliably and are left as typed."""
+    text = PHONE.sub("[phone number removed]", EMAIL.sub("[email removed]", text))
+    words = {w for n in names or [] for w in re.findall(r"\w+", n) if len(w) >= 2}
+    if words:
+        pattern = r"\b(" + "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + r")\b"
+        text = re.sub(pattern, "[name]", text, flags=re.IGNORECASE)
+    return text
 
 
 def plain(text: str) -> str:
@@ -127,16 +133,17 @@ def endpoint() -> tuple[str, str, bool]:
 
 
 def ask(history: list[tuple[str, str]], question: str, lang: str,
-        age_months: int | None) -> str:
-    """history: earlier (role, text) pairs, oldest first. Returns the assistant's reply."""
+        age_months: int | None, names: list[str] | None = None) -> str:
+    """history: earlier (role, text) pairs, oldest first. names: the names on the account,
+    replaced with [name] before sending. Returns the assistant's reply."""
     if not settings.openai_api_key:
         raise AssistantOff()
     system = SYSTEM.replace("{language}", "Swahili" if lang == "sw" else "English")
     if age_months is not None:
         system += f"\nThe caregiver is asking about a child who is {age_months} months old."
     messages = [{"role": "system", "content": system}]
-    messages += [{"role": r, "content": redact(t)} for r, t in history[-HISTORY:]]
-    messages.append({"role": "user", "content": redact(question)})
+    messages += [{"role": r, "content": redact(t, names)} for r, t in history[-HISTORY:]]
+    messages.append({"role": "user", "content": redact(question, names)})
     url, model, via_openrouter = endpoint()
     headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
     if via_openrouter:

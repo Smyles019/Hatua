@@ -770,6 +770,9 @@ async function chwCase(id) {
         h('div', { class: 'card' }, h('h3', {}, t('Log outcome')),
           h('p', { class: 'muted' }, t('The caregiver sees a short fixed message for the first two.')),
           pick, h('p', {}, save)),
+        h('div', { class: 'card' }, h('h3', {}, t('Full report')),
+          h('p', { class: 'muted' }, t('Every question the caregiver was asked and the answer they gave, to read here or as a PDF.')),
+          h('p', {}, h('a', { href: '#report/' + id }, t('Open the full report')))),
         h('div', { class: 'card' }, h('h3', {}, t('Family')),
           person(initial(a.caregiver.full_name), a.caregiver.full_name, a.caregiver.phone_number + (a.location ? ', ' + a.location : '')),
           h('p', {}, h('a', { href: '#thread/' + a.caregiver.user_id }, t('Chat with {name}', { name: a.caregiver.full_name.split(' ')[0] })))),
@@ -780,6 +783,37 @@ async function chwCase(id) {
           h('p', {}, g ? t('Latest measurement ({date}): {value}', { date: fmtDate(g.measured_on),
               value: [g.weight_kg ? g.weight_kg + ' kg' : null, g.height_cm ? g.height_cm + ' cm' : null].filter(Boolean).join(', ') })
             : h('span', { class: 'muted' }, t('No weight or height entered yet.')))))));
+}
+
+/** CHW only: the full report of one check, every question and answer, with a PDF. */
+async function chwReport(id) {
+  const r = await api('/chw/cases/' + id + '/report');
+  const RESULT = { done: t('Achieved'), not_yet: t('Not yet'), dont_know: t('Not sure'), concern: t('Needs a look'), ok: '' };
+  const answers = (rows) => table([t('No.'), t('Question'), t('Answer'), t('Counts as')], rows.map((a, i) =>
+    h('tr', { class: a.result === 'not_yet' || a.result === 'concern' ? 'flagged' : '' },
+      h('td', {}, String(i + 1)), h('td', {}, a.question), h('td', {}, a.answer_label), h('td', {}, RESULT[a.result]))));
+  const pdf = h('button', {}, icon('picture_as_pdf'), ' ', t('Open as PDF'));
+  pdf.addEventListener('click', () => {
+    const tab = window.open('', '_blank'); // opened now, so the browser does not block it
+    run(pdf, async () => {
+      try {
+        const link = await api('/chw/cases/' + id + '/report-link', { method: 'POST' });
+        if (tab) tab.location = link.url; else location.href = link.url;
+      } catch (e) { if (tab) tab.close(); throw e; }
+    });
+  });
+  const n = r.counts;
+  page({ title: t('Full report: {name}', { name: r.child.first_name }), back: ['#case/' + id, t('Back to the case')],
+    sub: t('Checked {when} by {name}', { when: fmtTime(r.submitted_at), name: r.caregiver.full_name }), chips: flagChips(r) },
+    h('div', { class: 'card' },
+      h('p', {}, h('b', {}, r.risk_label), r.outcome_label ? ' · ' + t('Outcome: {outcome}', { outcome: r.outcome_label }) : ''),
+      h('p', {}, t('{done} achieved, {not_yet} not yet, {dont_know} not sure.', n)),
+      r.red_flags.length ? h('ul', { class: 'plain' }, r.red_flags.map((f) => h('li', {}, f.kind_label + ': ' + f.label))) : null,
+      h('p', {}, pdf)),
+    ...r.sections.map((s) => h('div', { class: 'card' },
+      h('h3', {}, s.label, s.status === 'not_assessed' ? '' : ' · ' + (s.status === 'needs_support' ? t('Needs more practice') : t('On track'))),
+      answers(s.answers))),
+    r.screening.length ? h('div', { class: 'card' }, h('h3', {}, t('Hearing and eyes')), answers(r.screening)) : null);
 }
 
 async function chwFamilies() {
@@ -1148,7 +1182,7 @@ const PAGES = {
   caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Chat with your health worker'), 'chat_bubble', cgAsk]],
 };
 const DETAIL = {
-  chw: { case: chwCase, thread: async (id) => {
+  chw: { case: chwCase, report: chwReport, thread: async (id) => {
     const th = await api('/messages/threads/' + id);
     await threadView('/messages/threads/' + id, { title: th.caregiver.full_name, back: ['#questions', t('Chats')],
       sub: th.caregiver.phone_number }, { asChw: true });
