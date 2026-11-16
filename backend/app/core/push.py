@@ -89,8 +89,7 @@ def send(user_id: uuid.UUID, tokens: list[str], title: str, body: str,
     for token in tokens:
         message = {"token": token, "notification": {"title": title, "body": body},
                    "data": data,
-                   "android": {"priority": "high",
-                               "notification": {"channel_id": "hatua_updates"}}}
+                   "android": {"priority": "high"}}
         try:
             r = session.post(url, json={"message": message}, timeout=10)
         except Exception:

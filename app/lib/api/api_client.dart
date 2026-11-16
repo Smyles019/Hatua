@@ -70,6 +70,9 @@ class ApiClient {
   Future<dynamic> patch(String path, [Object? body]) =>
       _send(() => _http.patch(_uri(path), headers: _headers, body: jsonEncode(body ?? {})));
 
+  Future<dynamic> delete(String path, [Map<String, String?>? query]) =>
+      _send(() => _http.delete(_uri(path, query), headers: _headers));
+
   Future<dynamic> _send(Future<http.Response> Function() call) async {
     http.Response res;
     try {

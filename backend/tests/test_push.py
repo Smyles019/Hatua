@@ -87,7 +87,7 @@ def test_messages_tell_the_other_side(client, db_session):
     client.post("/messages", headers=cg_h, json={"body": "My child has a fever, what do I do?"})
     [q] = to(chw.user_id)
     assert q.title == "New question" and "Achieng" in q.body and "fever" not in q.body
-    assert q.data == {"type": "thread", "id": cg["user_id"]}
+    assert q.data == {"type": "thread", "id": cg["user_id"], "name": "Achieng"}
     client.post(f"/messages/threads/{cg['user_id']}", headers=chw_h, json={"body": "Come to the clinic"})
     [r] = to(cg["user_id"])
     assert r.title == "New message" and "clinic" not in r.body and r.data == {"type": "ask"}

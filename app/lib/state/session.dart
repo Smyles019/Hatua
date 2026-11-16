@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,7 @@ import '../api/api_client.dart';
 import '../api/models.dart';
 import 'google_auth.dart';
 import 'pending_check.dart';
+import 'push.dart';
 
 /// A first Google sign-in: the account needs a phone number before it can be created.
 class NeedsPhone implements Exception {}
@@ -154,6 +156,8 @@ class Session extends ChangeNotifier {
     await _loadPending();
     restored = true;
     notifyListeners();
+    // Already signed in from last time: make sure this phone still gets notifications.
+    if (user != null) unawaited(Push.signedIn(api));
   }
 
   /// Signs in with email and password. If the password is right but the email has not
@@ -219,9 +223,25 @@ class Session extends ChangeNotifier {
     await prefs.setString(_kUser, jsonEncode(user!.toJson()));
     await _loadPending();
     notifyListeners();
+    unawaited(Push.signedIn(api)); // this phone now gets this person's notifications
   }
 
+  bool _signingOut = false;
+
   Future<void> signOut() async {
+    // Also reached when the server rejects the token, possibly while the push token is
+    // being removed below; one sign-out at a time.
+    if (_signingOut) return;
+    _signingOut = true;
+    try {
+      await _signOut();
+    } finally {
+      _signingOut = false;
+    }
+  }
+
+  Future<void> _signOut() async {
+    await Push.signingOut(api); // first, while the session still works
     await GoogleAuth.signOut();
     api.token = null;
     user = null;

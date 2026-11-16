@@ -13,6 +13,10 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
+    volumes:
+      # Files the API reads but that never go in the image or git: the Firebase service
+      # account key for push notifications (FIREBASE_CREDENTIALS=/srv/secrets/firebase.json)
+      - ./secrets:/srv/secrets:ro
 
   caddy:
     image: caddy:2-alpine

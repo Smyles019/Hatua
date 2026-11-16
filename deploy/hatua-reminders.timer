@@ -1,0 +1,11 @@
+# Runs hatua-reminders.service every day at 09:00 East Africa Time (06:00 UTC), and
+# once after a restart if a run was missed while the server was off.
+[Unit]
+Description=Hatua: daily check reminders
+
+[Timer]
+OnCalendar=*-*-* 06:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

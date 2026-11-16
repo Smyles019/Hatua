@@ -45,3 +45,7 @@ Thumbs.db
 
 # ---- Local backups ----
 _backup/
+
+# Push notifications: Firebase's app config and the server's service account key
+app/android/app/google-services.json
+secrets/

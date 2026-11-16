@@ -62,7 +62,8 @@ def flagged_check(bg, db: Session, caregiver: User, child: Child, pred: Predicti
 
 def new_question(bg, db: Session, caregiver: User) -> None:
     _to(bg, _chw_of(db, caregiver), "New question", "{caregiver} sent you a question.",
-        {"type": "thread", "id": caregiver.user_id}, caregiver=caregiver.full_name)
+        {"type": "thread", "id": caregiver.user_id, "name": caregiver.full_name},
+        caregiver=caregiver.full_name)
 
 
 def chw_replied(bg, caregiver: User) -> None:

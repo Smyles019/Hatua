@@ -182,6 +182,16 @@
     "squatting to pick things up": "kuinama kuokota vitu"
   },
   "common": {
+    "A check needs your review": "Ukaguzi unasubiri uangalie",
+    "A check for {child} ({caregiver}) was sent to you.": "Ukaguzi wa {child} ({caregiver}) umetumwa kwako.",
+    "New question": "Swali jipya",
+    "{caregiver} sent you a question.": "{caregiver} amekutumia swali.",
+    "New message": "Ujumbe mpya",
+    "Your health worker replied to your question.": "Mhudumu wako wa afya amejibu swali lako.",
+    "{child}'s check was reviewed": "Ukaguzi wa {child} umeangaliwa",
+    "Your health worker has looked at {child}'s check. Open Hatua to see what they say.": "Mhudumu wako wa afya ameangalia ukaguzi wa {child}. Fungua Hatua uone anachosema.",
+    "Time for {child}'s check": "Wakati wa ukaguzi wa {child}",
+    "{child} has reached a new age stage. A short check shows how they are doing.": "{child} amefikia hatua mpya ya umri. Ukaguzi mfupi unaonyesha anavyoendelea.",
     "Sign in": "Ingia",
     "Sign out": "Toka",
     "Email": "Barua pepe",
@@ -234,6 +244,20 @@
     "don't know": "sijui"
   },
   "web": {
+    "Invited": "Amealikwa",
+    "Not added yet": "Bado haijaongezwa",
+    "Invite sent {date}": "Mwaliko ulitumwa {date}",
+    "A new invite was sent to {email}.": "Mwaliko mpya umetumwa kwa {email}.",
+    "Resend invite": "Tuma mwaliko tena",
+    "Send invite": "Tuma mwaliko",
+    "Invite sent to {email}.": "Mwaliko umetumwa kwa {email}.",
+    "Add a health worker": "Ongeza mhudumu wa afya",
+    "They get an email with a link to choose a password and add their phone number. They can also sign in with Google using this email.": "Watapokea barua pepe yenye kiungo cha kuchagua nenosiri na kuongeza nambari yao ya simu. Wanaweza pia kuingia kwa Google wakitumia barua pepe hii.",
+    "Community health workers review flagged checks and answer caregivers' questions.": "Wahudumu wa afya ya jamii hukagua ukaguzi ulioalamishwa na kujibu maswali ya walezi.",
+    "1 health worker has not set up their account yet. Caregivers can be linked to them once they have.": "Mhudumu 1 wa afya bado hajaweka akaunti yake. Walezi wanaweza kuunganishwa naye baada ya hapo.",
+    "{n} health workers have not set up their accounts yet. Caregivers can be linked to them once they have.": "Wahudumu {n} wa afya bado hawajaweka akaunti zao. Walezi wanaweza kuunganishwa nao baada ya hapo.",
+    "No health workers yet. Add one above.": "Bado hakuna wahudumu wa afya. Ongeza mmoja hapo juu.",
+    "Welcome, {name}. Add your phone number to finish setting up your health worker account for {email}.": "Karibu, {name}. Ongeza nambari yako ya simu ili kumaliza kuweka akaunti yako ya mhudumu wa afya ya {email}.",
     "Every step counts": "Kila hatua ni muhimu",
     "Hatua helps families notice how their child is growing, and makes sure a health worker follows up when a child needs support.": "Hatua husaidia familia kuona jinsi mtoto wao anavyokua, na huhakikisha mhudumu wa afya anafuatilia mtoto anapohitaji msaada.",
     "A 5-minute check for children under five": "Ukaguzi wa dakika 5 kwa watoto chini ya miaka mitano",
@@ -495,6 +519,7 @@
     "Write your question. Your health worker replies here.": "Andika swali lako. Mhudumu wako wa afya atajibu hapa."
   },
   "app": {
+    "Open": "Fungua",
     "The connection is slow. Please try again.": "Mtandao ni wa polepole. Tafadhali jaribu tena.",
     "No connection. Check your data or Wi-Fi and try again.": "Hakuna mtandao. Angalia data au Wi-Fi yako kisha ujaribu tena.",
     "The service is not ready yet. Please try again later.": "Huduma bado haiko tayari. Tafadhali jaribu tena baadaye.",

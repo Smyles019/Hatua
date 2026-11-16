@@ -519,6 +519,7 @@
     "Write your question. Your health worker replies here.": "Andika swali lako. Mhudumu wako wa afya atajibu hapa."
   },
   "app": {
+    "Open": "Fungua",
     "The connection is slow. Please try again.": "Mtandao ni wa polepole. Tafadhali jaribu tena.",
     "No connection. Check your data or Wi-Fi and try again.": "Hakuna mtandao. Angalia data au Wi-Fi yako kisha ujaribu tena.",
     "The service is not ready yet. Please try again later.": "Huduma bado haiko tayari. Tafadhali jaribu tena baadaye.",
