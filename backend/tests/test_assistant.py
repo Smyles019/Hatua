@@ -34,7 +34,38 @@ def openai(monkeypatch):
     fake = FakeOpenAI()
     monkeypatch.setattr(settings, "openai_api_key", "sk-test")
     monkeypatch.setattr(assistant.requests, "post", fake)
+    monkeypatch.setattr(assistant.time_mod, "sleep", lambda s: None)
     return fake
+
+
+def test_phone_numbers_and_emails_never_leave_the_server(client, openai):
+    _, cg = register_caregiver(client)
+    question = "Call me on 0712 345 678 or +254712345678, or mail allgersmyles@gmail.com"
+    s = client.post("/assistant", headers=cg, json={"body": question}).json()
+    sent = str(openai.sent)
+    for private in ("0712 345 678", "254712345678", "allgersmyles@gmail.com"):
+        assert private not in sent, private
+    assert "[phone number removed]" in sent and "[email removed]" in sent
+    assert s["messages"][0]["body"] == question  # the caregiver's own copy is kept as typed
+    # Ages and short numbers are left alone
+    assert assistant.redact("She is 14 months, 2 years") == "She is 14 months, 2 years"
+
+
+def test_a_passing_provider_error_is_tried_once_more(client, openai):
+    _, cg = register_caregiver(client)
+
+    class Down:
+        status_code = 500
+
+    calls = []
+
+    def flaky(url, timeout, headers, json):
+        calls.append(1)
+        return Down() if len(calls) == 1 else openai(url, timeout, headers, json)
+
+    assistant.requests.post = flaky  # the fixture's monkeypatch restores it afterwards
+    r = client.post("/assistant", headers=cg, json={"body": "Games for crawling?"})
+    assert r.status_code == 200 and len(calls) == 2
 
 
 def test_answers_and_keeps_the_conversation(client, openai):

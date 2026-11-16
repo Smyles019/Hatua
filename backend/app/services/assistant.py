@@ -10,14 +10,17 @@ Safety, in order:
 2. Instructions to the model (SYSTEM): development, play, how Hatua works and general
    care only; never a diagnosis, never a medicine, dose or treatment; anything serious
    or lasting goes to a health worker; short, plain answers in the caregiver's language.
-3. What leaves the server: the conversation text and, if a child is chosen, their age in
-   months. Never names, results or the account.
+3. What leaves the server: the conversation text, with phone numbers and email addresses
+   removed (redact), and, if a child is chosen, their age in months. Never the child's
+   or caregiver's name from the account, results or the account.
+4. A passing provider error (5xx, rate limit, dropped connection) is tried once more.
 
 Conversations are saved per caregiver (assistant_messages) and the caregiver can clear
 them. Each caregiver can send settings.assistant_daily_limit messages a day.
 """
 import logging
 import re
+import time as time_mod
 from datetime import datetime, time, timedelta, timezone
 
 import requests
@@ -68,11 +71,12 @@ You may help with:
 - general child care and health: feeding and breastfeeding, sleep, hygiene, safety, and what to watch for with common illnesses
 
 Rules you must always follow:
-- Never diagnose or say what illness or condition a child has. Never say a child is or is not developing normally; say that a Hatua check and their CHW can help.
+- Never diagnose or say what illness or condition a child has. Never name or suggest a condition (for example autism or cerebral palsy), even to say it may or may not be the cause.
+- Never judge a child's development: do not say a child is normal, fine, behind, delayed or worrying, and do not say something "might be normal". Explain that children grow at different rates, give ideas to try, and say that a Hatua check and their CHW can look at how the child is doing.
 - Never name, recommend or give doses of any medicine, supplement, herbal or home remedy, or treatment. If asked, say a health worker must advise on that.
 - If something sounds serious, is getting worse, or lasts more than a day or two, say to see a health worker or go to a health facility, and suggest messaging their CHW in Hatua's chat.
 - If the child shows any danger sign (cannot drink or breastfeed, convulsions, fast or difficult breathing, blood in the stool, very sleepy or hard to wake, a young baby with yellow eyes or skin, or a fever or feeling very hot or cold in a baby under 2 months), say to go to a health facility now.
-- Do not ask for, use or repeat names, phone numbers or other personal details.
+- Do not ask for, use or repeat names, phone numbers or other personal details, even when the caregiver gives them: say "your child" or "your baby" instead.
 - For anything not about children's development, care or health, or about Hatua, say kindly that you can only help with those.
 - Keep answers short (under 120 words), warm and in plain words. Use at most 4 short points.
 - Write plain text only: no markdown, no asterisks, no bold, no headings. For points, start each line with a dash.
@@ -82,6 +86,16 @@ Rules you must always follow:
 def mentions_danger_sign(text: str) -> bool:
     t = " ".join(text.lower().split())
     return any(p.search(t) for p in DANGER)
+
+
+PHONE = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
+EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s.]+")
+
+
+def redact(text: str) -> str:
+    """Phone numbers and email addresses never leave the server, whatever the caregiver
+    types (names cannot be found reliably, so the screen asks people not to type them)."""
+    return PHONE.sub("[phone number removed]", EMAIL.sub("[email removed]", text))
 
 
 def plain(text: str) -> str:
@@ -121,17 +135,24 @@ def ask(history: list[tuple[str, str]], question: str, lang: str,
     if age_months is not None:
         system += f"\nThe caregiver is asking about a child who is {age_months} months old."
     messages = [{"role": "system", "content": system}]
-    messages += [{"role": r, "content": t} for r, t in history[-HISTORY:]]
-    messages.append({"role": "user", "content": question})
+    messages += [{"role": r, "content": redact(t)} for r, t in history[-HISTORY:]]
+    messages.append({"role": "user", "content": redact(question)})
     url, model, via_openrouter = endpoint()
     headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
     if via_openrouter:
         headers["X-Title"] = "Hatua"
     # OpenRouter takes max_tokens; OpenAI's newer models only max_completion_tokens.
     limit = {"max_tokens" if via_openrouter else "max_completion_tokens": 400}
+    payload = {"model": model, "messages": messages, **limit}
     try:
-        r = requests.post(url, timeout=30, headers=headers,
-                          json={"model": model, "messages": messages, **limit})
+        try:
+            r = requests.post(url, timeout=30, headers=headers, json=payload)
+            temporary = r.status_code >= 500 or r.status_code == 429
+        except requests.ConnectionError:
+            temporary = True
+        if temporary:  # one more try for a passing provider error, after a short pause
+            time_mod.sleep(1)
+            r = requests.post(url, timeout=30, headers=headers, json=payload)
         r.raise_for_status()
         reply = plain(r.json()["choices"][0]["message"]["content"])
     except (requests.RequestException, KeyError, IndexError, ValueError, AttributeError) as e:
