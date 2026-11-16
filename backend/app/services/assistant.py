@@ -88,6 +88,30 @@ def mentions_danger_sign(text: str) -> bool:
     return any(p.search(t) for p in DANGER)
 
 
+# A fever, or feeling very hot or very cold, is a danger sign on its own in a baby under 2
+# months (MOH handbook). The model was not reliable about this in testing (it answered a
+# "4 week old feels very hot" question with "go if they are also not feeding"), so it is
+# a fixed rule too: by the chosen child's age, or a young age written in the question.
+FEVER = [re.compile(p) for p in (
+    r"fever", r"\bhot\b", r"temperature", r"(very|too) cold", r"\bhoma\b", r"joto",
+    r"baridi sana",
+)]
+YOUNG = [re.compile(p) for p in (
+    r"\b([1-8]|one|two|three|four|five|six|seven|eight)[ -]?(weeks?|wks?)\b",
+    r"\b\d{1,2}[ -]?days?[ -]old\b", r"new ?born", r"\b1[ -]?month[ -]old\b", r"one month old",
+    r"mtoto mchanga", r"wiki (moja|mbili|tatu|nne|tano|sita|saba|nane|[1-8])\b", r"siku \d",
+)]
+
+
+def needs_urgent_reply(text: str, age_months: int | None = None) -> bool:
+    """A danger sign: the fixed "go to a health facility now" reply, without the AI."""
+    if mentions_danger_sign(text):
+        return True
+    t = " ".join(text.lower().split())
+    young = (age_months is not None and age_months < 2) or any(p.search(t) for p in YOUNG)
+    return young and any(p.search(t) for p in FEVER)
+
+
 PHONE = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
 EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s.]+")
 

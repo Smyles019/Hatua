@@ -60,7 +60,8 @@ def ask(body: AssistantIn, user: User = Depends(caregiver_only), db: Session = D
     if _used_today(db, user) >= settings.assistant_daily_limit:
         raise HTTPException(429, "you have reached today's limit for the assistant; try "
                                  "again tomorrow, or message your health worker")
-    flagged = assistant.mentions_danger_sign(question)
+    child_age = age_in_months(child.date_of_birth) if child else None
+    flagged = assistant.needs_urgent_reply(question, child_age)
     if flagged:
         # Fixed reply, no AI: works even when the assistant is switched off.
         reply = assistant.urgent_reply(user.language)

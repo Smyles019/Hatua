@@ -115,6 +115,26 @@ def test_danger_signs_get_the_fixed_reply_without_the_ai(client, openai):
         assert not assistant.mentions_danger_sign(fine), fine
 
 
+def test_a_fever_in_a_baby_under_2_months_gets_the_fixed_reply(client, openai):
+    _, cg = register_caregiver(client)
+    baby = add_child(client, cg, 1, name="Neema")["child_id"]
+    toddler = add_child(client, cg, 20, name="Juma")["child_id"]
+    s = client.post("/assistant", headers=cg,
+                    json={"body": "She feels very hot", "child_id": baby}).json()
+    assert s["messages"][-1]["flagged"]
+    for text in ("My 4 week old baby feels very hot", "newborn has a fever",
+                 "Mtoto wa wiki mbili ana joto", "my 10 day old baby is very cold"):
+        assert assistant.needs_urgent_reply(text), text
+    assert openai.sent == []
+    # An older child with a fever goes to the AI, which says when to see a health worker
+    s = client.post("/assistant", headers=cg,
+                    json={"body": "He feels very hot", "child_id": toddler}).json()
+    assert not s["messages"][-1]["flagged"] and len(openai.sent) == 1
+    for text in ("my 2 year old has a fever", "is hot water safe for bathing?",
+                 "games for a 6 month old"):
+        assert not assistant.needs_urgent_reply(text, 20), text
+
+
 def test_swahili_caregiver_gets_swahili(client, openai):
     _, cg = register_caregiver(client)
     client.patch("/auth/me", headers=cg, json={"language": "sw"})

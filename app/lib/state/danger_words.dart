@@ -16,9 +16,21 @@ final _danger = [
   r'yellow (eyes|skin|palms|soles)', r'(eyes|skin) (look |are |is )?yellow', r'manjano',
 ].map(RegExp.new).toList();
 
+// A fever, or feeling very hot or very cold, in a baby under 2 months (backend FEVER and
+// YOUNG). Offline the phone only has the words, so the age must be in the question.
+final _fever = [
+  r'fever', r'\bhot\b', r'temperature', r'(very|too) cold', r'\bhoma\b', r'joto', r'baridi sana',
+].map(RegExp.new).toList();
+final _young = [
+  r'\b([1-8]|one|two|three|four|five|six|seven|eight)[ -]?(weeks?|wks?)\b',
+  r'\b\d{1,2}[ -]?days?[ -]old\b', r'new ?born', r'\b1[ -]?month[ -]old\b', r'one month old',
+  r'mtoto mchanga', r'wiki (moja|mbili|tatu|nne|tano|sita|saba|nane|[1-8])\b', r'siku \d',
+].map(RegExp.new).toList();
+
 bool mentionsDangerSign(String text) {
   final t = text.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
-  return _danger.any((p) => p.hasMatch(t));
+  if (_danger.any((p) => p.hasMatch(t))) return true;
+  return _young.any((p) => p.hasMatch(t)) && _fever.any((p) => p.hasMatch(t));
 }
 
 /// The fixed reply, word for word the backend's URGENT (translated with tr()).
