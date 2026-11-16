@@ -1123,7 +1123,8 @@ async function cgAssistant() {
           m.flagged && m.role !== 'user' ? icon('emergency') : null, m.body)))
       : empty(t('Ask about how your child is growing, play ideas, feeding, sleep or everyday care.'), 'auto_awesome'),
     s.available
-      ? h('div', {}, field(t('About'), about), text, h('p', {}, send))
+      // Two separate fields with their own labels and a gap, so they do not read as one box.
+      ? h('div', { class: 'ask-form' }, field(t('About'), about), field(t('Your question'), text), h('p', {}, send))
       : h('p', { class: 'muted' }, t('The assistant is not switched on yet.')));
   const side = h('div', {},
     h('div', { class: 'note' }, icon('info'), h('div', {},
