@@ -36,7 +36,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     if (_future == null || _version != s.dataVersion) _load();
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Questions from caregivers'))),
+      appBar: AppBar(title: Text(tr('Chats with caregivers'))),
       body: RefreshIndicator(
         color: context.hc.plum700,
         onRefresh: () async {
@@ -52,8 +52,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               children: [
                 if (threads.isEmpty)
                   EmptyPanel(
-                    title: tr('No questions yet'),
-                    message: tr('When a caregiver linked to you asks a question, it shows here.'),
+                    title: tr('No chats yet'),
+                    message: tr('Chats with caregivers linked to you show here. To start one, open a caregiver under Caregivers.'),
                     icon: Icons.chat_bubble_outline_rounded,
                   ),
                 for (final th in threads) ...[

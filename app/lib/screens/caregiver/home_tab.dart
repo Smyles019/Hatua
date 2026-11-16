@@ -188,8 +188,8 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
           _Tool(
             icon: Icons.chat_bubble_outline_rounded,
             color: context.hc.plum100,
-            title: tr('Ask a health worker'),
-            subtitle: tr('Send a question'),
+            title: tr('Chat with your health worker'),
+            subtitle: tr('Send a message'),
             onTap: () => Navigator.of(context)
                 .push(MaterialPageRoute(builder: (_) => const ThreadScreen())),
           ),

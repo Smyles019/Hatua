@@ -1,8 +1,8 @@
 """Who gets a push notification, and what it says (sent by app.core.push).
 
     CHW        a check from one of their families was sent to them for review
-               a caregiver sent them a question
-    caregiver  their CHW replied
+               a caregiver sent them a message
+    caregiver  their CHW sent them a message
                their CHW reviewed a check (refer or not concerning; nothing for
                "unreachable", as on the result screen)
                a child reached a new age band with no check yet (daily job:
@@ -61,13 +61,13 @@ def flagged_check(bg, db: Session, caregiver: User, child: Child, pred: Predicti
 
 
 def new_question(bg, db: Session, caregiver: User) -> None:
-    _to(bg, _chw_of(db, caregiver), "New question", "{caregiver} sent you a question.",
+    _to(bg, _chw_of(db, caregiver), "New message", "{caregiver} sent you a message.",
         {"type": "thread", "id": caregiver.user_id, "name": caregiver.full_name},
         caregiver=caregiver.full_name)
 
 
 def chw_replied(bg, caregiver: User) -> None:
-    _to(bg, caregiver, "New message", "Your health worker replied to your question.",
+    _to(bg, caregiver, "New message", "Your health worker sent you a message.",
         {"type": "ask"})
 
 

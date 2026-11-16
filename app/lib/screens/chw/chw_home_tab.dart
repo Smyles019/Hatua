@@ -158,10 +158,10 @@ class _QuestionsCard extends StatelessWidget {
         Expanded(
           child: Text(
             waiting == 0
-                ? tr('Questions from caregivers')
+                ? tr('Chats with caregivers')
                 : waiting == 1
-                    ? tr('1 question is waiting for your reply')
-                    : tr('{waiting} questions are waiting for your reply', {'waiting': waiting}),
+                    ? tr('1 chat is waiting for your reply')
+                    : tr('{waiting} chats are waiting for your reply', {'waiting': waiting}),
             style: Theme.of(context)
                 .textTheme
                 .titleMedium

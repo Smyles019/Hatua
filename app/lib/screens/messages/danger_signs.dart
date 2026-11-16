@@ -5,8 +5,8 @@ import '../../theme/theme.dart';
 import '../../i18n/strings.dart';
 
 /// "When to return immediately" from the MOH Mother and Child Health Handbook, in plain
-/// words. Shown before a caregiver sends a question to their CHW, so an emergency goes
-/// to a health facility and not into a message queue.
+/// words. Shown before a caregiver's first message in a visit to the chat with their
+/// CHW, so an emergency goes to a health facility and not into a chat.
 List<String> get dangerSigns => [
       tr('Cannot drink or breastfeed, or is feeding very poorly'),
       tr('Has fast or difficult breathing'),
@@ -61,7 +61,7 @@ Future<bool?> showDangerSigns(BuildContext context, {bool readOnly = false}) {
               else ...[
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: Text(tr('None of these. Send my question')),
+                  child: Text(tr('None of these. Send my message')),
                 ),
                 const SizedBox(height: Space.s2),
                 TextButton(

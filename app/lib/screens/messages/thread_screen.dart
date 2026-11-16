@@ -10,11 +10,11 @@ import '../../widgets/common.dart';
 import 'danger_signs.dart';
 import '../../i18n/strings.dart';
 
-/// Ask a CHW: one caregiver's message thread with their community health worker.
-///
-/// Not live chat: the caregiver writes, the CHW replies when they can. The same screen
-/// serves both sides. For a caregiver [caregiverId] is null (their own thread); for a
-/// CHW it is the caregiver whose thread is open.
+/// The chat between one caregiver and their community health worker. Either side can
+/// write first and keep writing; the CHW answers when they can, so it is not for
+/// emergencies (the danger signs are shown before a caregiver's first message in each
+/// visit). The same screen serves both sides: for a caregiver [caregiverId] is null
+/// (their own chat); for a CHW it is the caregiver whose chat is open.
 class ThreadScreen extends StatefulWidget {
   const ThreadScreen(
       {super.key, this.caregiverId, this.caregiverName, this.predictionId, this.aboutChild});
@@ -96,7 +96,7 @@ class _ThreadScreenState extends State<ThreadScreen> {
     return Scaffold(
       appBar: AppBar(
         title:
-            Text(widget.asChw ? (widget.caregiverName ?? tr('Question')) : tr('Ask your health worker')),
+            Text(widget.asChw ? (widget.caregiverName ?? tr('Chat')) : tr('Chat with your health worker')),
         actions: [
           IconButton(
             tooltip: tr('Refresh'),
@@ -132,7 +132,7 @@ class _ThreadScreenState extends State<ThreadScreen> {
             Expanded(
               child: Text(
                 thread.chwName == null
-                    ? tr('You are not linked to a community health worker yet. You can still write your question; it will reach them once you are linked.')
+                    ? tr('You are not linked to a community health worker yet. You can still write a message; it will reach them once you are linked.')
                     : tr('{chwName} is your community health worker. They reply when they can, often within a day or two. This is not for emergencies.', {'chwName': thread.chwName}),
                 style: t.bodySmall?.copyWith(color: context.hc.plum900),
               ),
@@ -154,27 +154,16 @@ class _ThreadScreenState extends State<ThreadScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: Space.s6),
           child: Text(
-            widget.asChw
-                ? tr('No messages yet.')
-                : widget.aboutChild == null
-                    ? tr('Write your question below.')
-                    : tr("Write your question about {aboutChild}'s check below.", {'aboutChild': widget.aboutChild}),
+            widget.aboutChild == null
+                ? tr('No messages yet. Send one below to start the chat.')
+                : tr("Write a message about {aboutChild}'s check below.", {'aboutChild': widget.aboutChild}),
             style: t.bodyMedium,
             textAlign: TextAlign.center,
           ),
         ),
+      // A chat, not questions and answers: no "answered" line under the messages. The
+      // CHW's chat list still shows which chats are waiting for them.
       for (final m in thread.messages) _Bubble(m),
-      if (thread.messages.isNotEmpty) ...[
-        const SizedBox(height: Space.s2),
-        Center(
-          child: Text(
-            thread.waitingForChw
-                ? (widget.asChw ? tr('Waiting for your reply') : tr('Sent. Waiting for a reply.'))
-                : (widget.asChw ? tr('You replied') : tr('Answered')),
-            style: t.labelMedium,
-          ),
-        ),
-      ],
     ]);
   }
 
@@ -190,7 +179,7 @@ class _ThreadScreenState extends State<ThreadScreen> {
             maxLength: 1000,
             textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
-              hintText: widget.asChw ? tr('Write your reply') : tr('Write your question'),
+              hintText: tr('Write a message'),
               counterText: '',
             ),
           ),

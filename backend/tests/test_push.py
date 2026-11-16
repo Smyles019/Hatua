@@ -86,7 +86,7 @@ def test_messages_tell_the_other_side(client, db_session):
     chw, chw_h, cg, cg_h = family(client, db_session)
     client.post("/messages", headers=cg_h, json={"body": "My child has a fever, what do I do?"})
     [q] = to(chw.user_id)
-    assert q.title == "New question" and "Achieng" in q.body and "fever" not in q.body
+    assert q.title == "New message" and "Achieng" in q.body and "fever" not in q.body
     assert q.data == {"type": "thread", "id": cg["user_id"], "name": "Achieng"}
     client.post(f"/messages/threads/{cg['user_id']}", headers=chw_h, json={"body": "Come to the clinic"})
     [r] = to(cg["user_id"])
@@ -112,7 +112,7 @@ def test_notifications_come_in_the_persons_language(client, db_session):
     chw, _, _, cg_h = family(client, db_session, chw_language="sw")
     client.post("/messages", headers=cg_h, json={"body": "Habari"})
     [q] = to(chw.user_id)
-    assert q.title != "New question" and "Achieng" in q.body
+    assert q.title != "New message" and "Achieng" in q.body
 
 
 def test_nothing_is_sent_without_a_phone(client, db_session):
@@ -155,3 +155,15 @@ def test_check_reminders_once_per_age_band(client, db_session):
     with db_session() as db:
         from app.db.models import Child
         assert db.get(Child, uuid.UUID(quiet)).reminded_band is not None
+
+
+def test_a_chw_can_start_the_chat(client, db_session):
+    _, chw_h, cg, cg_h = family(client, db_session)
+    r = client.post(f"/messages/threads/{cg['user_id']}", headers=chw_h,
+                    json={"body": "Hello, I am your health worker"})
+    assert r.status_code == 201
+    [p] = to(cg["user_id"])
+    assert p.title == "New message" and p.data == {"type": "ask"}
+    thread = client.get("/messages", headers=cg_h).json()
+    assert [m["sender_role"] for m in thread["messages"]] == ["chw"]
+    assert client.post("/messages", headers=cg_h, json={"body": "  "}).status_code == 422

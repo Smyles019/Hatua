@@ -250,7 +250,7 @@ function signinScreen(form) {
       h('ul', { class: 'points' },
         h('li', {}, h('span', { class: 'ico bg-sky' }, icon('child_care')), t('A 5-minute check for children under five')),
         h('li', {}, h('span', { class: 'ico bg-sun' }, icon('health_and_safety')), t('Health workers follow up on flagged results')),
-        h('li', {}, h('span', { class: 'ico bg-blush' }, icon('chat_bubble')), t('Questions answered by your own health worker')))),
+        h('li', {}, h('span', { class: 'ico bg-blush' }, icon('chat_bubble')), t('Chat with your own health worker')))),
     h('div', { class: 'form-side' }, form)));
 }
 
@@ -513,7 +513,7 @@ async function adminChws() {
     h('p', { class: 'muted' }, t('They get an email with a link to choose a password and add their phone number. They can also sign in with Google using this email.')));
 
   const waiting = chws.filter((c) => c.invite_pending && c.is_active).length;
-  page({ title: t('Health workers'), sub: t('Community health workers review flagged checks and answer caregivers\' questions.') },
+  page({ title: t('Health workers'), sub: t('Community health workers review flagged checks and chat with caregivers.') },
     form,
     waiting ? note(t(waiting === 1 ? '1 health worker has not set up their account yet. Caregivers can be linked to them once they have.'
       : '{n} health workers have not set up their accounts yet. Caregivers can be linked to them once they have.', { n: waiting })) : null,
@@ -590,7 +590,7 @@ async function adminLinking() {
     }));
     return h('tr', {}, h('td', {}, person(initial(c.full_name), c.full_name, c.email || '')), h('td', {}, c.phone_number), h('td', {}, pick));
   });
-  page({ title: t('Linking'), sub: t('Each caregiver needs a health worker, or their flagged results and questions reach nobody.') },
+  page({ title: t('Linking'), sub: t('Each caregiver needs a health worker, or their flagged results and messages reach nobody.') },
     unlinked ? note(t(unlinked === 1 ? '1 caregiver has no health worker yet. They are listed first.' : '{n} caregivers have no health worker yet. They are listed first.', { n: unlinked })) : null,
     h('div', { class: 'card' }, caregivers.length
       ? table([t('Caregiver'), t('Phone'), t('Health worker')], rows) : empty(t('No caregivers yet.'), 'family_restroom')));
@@ -671,16 +671,17 @@ const DANGER = [
   t('is a young baby whose palms, soles or eyes look yellow'),
 ];
 
-/** A message thread. path is /messages (caregiver) or /messages/threads/<id> (health worker). */
+/** The chat between a caregiver and their health worker. path is /messages (caregiver)
+ * or /messages/threads/<id> (health worker). Either side can write first. */
 async function threadView(path, head, opts = {}) {
   const th = await api(path);
-  const text = h('textarea', { rows: 3, maxlength: 1000, 'aria-label': opts.asChw ? t('Your reply') : t('Your question'),
-    placeholder: opts.asChw ? t('Write your reply') : t('Write your question') });
-  // Caregivers see the danger signs next to the send button, so an emergency goes to a
-  // health facility instead of waiting in this thread.
-  const send = h('button', {}, icon('send'), opts.asChw ? t('Send reply') : t('None of these apply. Send my question'));
+  const text = h('textarea', { rows: 3, maxlength: 1000, 'aria-label': t('Your message'),
+    placeholder: t('Write a message') });
+  // Caregivers see the danger signs beside the chat the whole time, so an emergency goes
+  // to a health facility instead of waiting here.
+  const send = h('button', {}, icon('send'), t('Send'));
   send.addEventListener('click', () => run(send, async () => {
-    if (!text.value.trim()) throw new Error(opts.asChw ? t('Write your reply first.') : t('Write your question first.'));
+    if (!text.value.trim()) throw new Error(t('Write a message first.'));
     await api(path, { method: 'POST', body: { body: text.value, prediction_id: opts.predictionId || undefined } });
     await threadView(path, head, opts);
   }));
@@ -689,14 +690,12 @@ async function threadView(path, head, opts = {}) {
       ? h('div', { class: 'thread' }, th.messages.map((m) => h('div', { class: 'bubble' + (m.from_me ? ' me' : '') },
           m.about ? h('b', {}, t("About {name}'s check. ", { name: m.about.child_name })) : null, m.body,
           h('small', {}, (m.from_me ? t('You') : m.sender_name) + ', ' + fmtTime(m.created_at)))))
-      : empty(t('No messages yet.'), 'chat_bubble'),
-    th.messages.length ? h('p', { class: 'status' }, th.waiting_for_chw
-      ? (opts.asChw ? t('Waiting for your reply') : t('Sent. Waiting for a reply.')) : (opts.asChw ? t('You replied') : t('Answered'))) : null,
+      : empty(t('No messages yet. Send one below to start the chat.'), 'chat_bubble'),
     text, h('p', {}, send));
   const side = opts.asChw ? null : h('div', {},
     h('div', { class: 'note' }, icon('schedule'), h('div', {}, th.chw
       ? t('{name} is your community health worker. They reply when they can, often within a day or two.', { name: th.chw.full_name })
-      : t('You are not linked to a community health worker yet. You can still write; your question reaches them once you are linked.'))),
+      : t('You are not linked to a community health worker yet. You can still write a message; it will reach them once you are linked.'))),
     h('div', { class: 'alert' }, icon('emergency'), h('div', {},
       h('b', {}, t('Go to a health facility now, and do not wait for a reply, if your child:')),
       h('ul', { class: 'plain' }, DANGER.map((d) => h('li', {}, d))))));
@@ -727,7 +726,7 @@ async function chwHome() {
   page({ title: t('Hello, {name}', { name: me.full_name.split(' ')[0] }), sub: t('Children who need a follow-up are listed below, the highest risk first.') },
     h('div', { class: 'tiles' },
       tile('flag', 'bg-blush', open.length, t('Cases waiting for review'), { warn: true }),
-      tile('chat_bubble', 'bg-sun', waiting, t('Questions waiting for a reply'), { warn: true, href: '#questions' }),
+      tile('chat_bubble', 'bg-sun', waiting, t('Chats waiting for a reply'), { warn: true, href: '#questions' }),
       tile('family_restroom', 'bg-sky', families.length, t('Families linked to you'), { href: '#families' })),
     h('div', { class: 'card' }, h('h3', {}, t('Flagged cases')),
       open.length ? caseTable(open) : empty(t('All caught up. No children need a follow-up right now.'), 'task_alt')));
@@ -773,7 +772,7 @@ async function chwCase(id) {
           pick, h('p', {}, save)),
         h('div', { class: 'card' }, h('h3', {}, t('Family')),
           person(initial(a.caregiver.full_name), a.caregiver.full_name, a.caregiver.phone_number + (a.location ? ', ' + a.location : '')),
-          h('p', {}, h('a', { href: '#thread/' + a.caregiver.user_id }, t('Messages with {name}', { name: a.caregiver.full_name.split(' ')[0] })))),
+          h('p', {}, h('a', { href: '#thread/' + a.caregiver.user_id }, t('Chat with {name}', { name: a.caregiver.full_name.split(' ')[0] })))),
         h('div', { class: 'card' }, h('h3', {}, t('About {name}', { name: a.child_name })),
           a.care_factors && a.care_factors.length
             ? h('ul', { class: 'plain' }, a.care_factors.map((f) => h('li', {}, CARE[f] || f)))
@@ -797,24 +796,24 @@ async function chwFamilies() {
   } }, h('h3', {}, t('Link a caregiver')),
     h('p', { class: 'muted' }, t('For a caregiver who already has a Hatua account.')),
     h('div', { class: 'row' }, field(t('Their phone number'), phone), link));
-  page({ title: t('My families'), sub: t('Caregivers linked to you. Their flagged checks and questions come to you.') },
+  page({ title: t('My families'), sub: t('Caregivers linked to you. Their flagged checks and messages come to you.') },
     h('div', { class: 'split' },
       h('div', { class: 'card' }, families.length ? table([t('Caregiver'), t('Children'), t('Open cases'), ''], families.map((f) => h('tr', {},
         h('td', {}, person(initial(f.full_name), f.full_name, f.phone_number)), h('td', {}, f.children),
         h('td', {}, f.open_cases ? h('span', { class: 'chip medium' }, f.open_cases) : 0),
-        h('td', {}, h('a', { href: '#thread/' + f.user_id }, t('Messages')))))) : empty(t('No caregivers are linked to you yet.'), 'family_restroom')),
+        h('td', {}, h('a', { href: '#thread/' + f.user_id }, t('Chat')))))) : empty(t('No caregivers are linked to you yet.'), 'family_restroom')),
       linkForm));
 }
 
 async function chwQuestions() {
   const threads = await api('/messages/threads');
-  page({ title: t('Questions'), sub: t('Questions from caregivers linked to you. Unanswered ones are first.') },
+  page({ title: t('Chats'), sub: t('Chats with caregivers linked to you. Ones waiting for your reply come first.') },
     h('div', { class: 'card' }, threads.length ? table([t('Caregiver'), t('Latest message'), t('When'), ''], threads.map((th) => linkRow('thread/' + th.caregiver.user_id,
       h('td', {}, person(initial(th.caregiver.full_name), th.caregiver.full_name)),
       h('td', {}, th.last_message.body.slice(0, 90)),
       h('td', {}, fmtTime(th.last_message.created_at)),
       h('td', {}, th.waiting_for_chw ? h('span', { class: 'chip medium' }, t('Waiting for your reply')) : h('span', { class: 'chip low' }, t('Replied'))))))
-      : empty(t('When a caregiver linked to you asks a question, it shows here.'), 'chat_bubble')));
+      : empty(t('Chats with caregivers linked to you show here. To start one, choose Chat next to a family under My families.'), 'chat_bubble')));
 }
 
 // ---------- caregiver ----------
@@ -1094,8 +1093,8 @@ async function cgCheck(id) {
 async function cgAsk() {
   const about = askAbout; askAbout = null;
   await threadView('/messages', {
-    title: about ? t("Ask about {name}'s check", { name: about.name }) : t('Ask your health worker'),
-    sub: t('Write your question. Your health worker replies here.') },
+    title: about ? t("Chat about {name}'s check", { name: about.name }) : t('Chat with your health worker'),
+    sub: t('Your health worker replies here when they can.') },
     { predictionId: about ? about.id : null });
 }
 
@@ -1106,13 +1105,13 @@ const PAGES = {
     ['users', t('Users'), 'group', adminUsers], ['linking', t('Linking'), 'link', adminLinking],
     ['reports', t('Reports'), 'description', adminReports]],
   chw: [['home', t('Home'), 'home', chwHome], ['families', t('My families'), 'family_restroom', chwFamilies],
-    ['questions', t('Questions'), 'chat_bubble', chwQuestions], ['reviewed', t('Reviewed'), 'fact_check', chwReviewed]],
-  caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Ask your health worker'), 'chat_bubble', cgAsk]],
+    ['questions', t('Chats'), 'chat_bubble', chwQuestions], ['reviewed', t('Reviewed'), 'fact_check', chwReviewed]],
+  caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Chat with your health worker'), 'chat_bubble', cgAsk]],
 };
 const DETAIL = {
   chw: { case: chwCase, thread: async (id) => {
     const th = await api('/messages/threads/' + id);
-    await threadView('/messages/threads/' + id, { title: th.caregiver.full_name, back: ['#questions', t('Questions')],
+    await threadView('/messages/threads/' + id, { title: th.caregiver.full_name, back: ['#questions', t('Chats')],
       sub: th.caregiver.phone_number }, { asChw: true });
   } },
   caregiver: { child: cgChild, check: cgCheck, edit: cgEditChild },
