@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../api/models.dart';
+import '../../state/outbox.dart';
 import '../../state/session.dart';
 import '../../theme/colors.dart';
 import '../../theme/theme.dart';
@@ -391,9 +392,18 @@ class _GrowthDialogState extends State<_GrowthDialog> {
     final session = context.read<Session>();
     try {
       final entry = GrowthEntry(measuredOn: DateTime.now(), weightKg: w, heightCm: h);
-      await session.api.post('/children/${widget.child.childId}/growth', entry.toJson());
+      await session.sendOrQueue(
+          kind: 'growth',
+          path: '/children/${widget.child.childId}/growth',
+          body: entry.toJson(),
+          label: tr("{name}'s weight and height", {'name': widget.child.firstName}));
       session.dataChanged();
       if (mounted) Navigator.of(context).pop();
+    } on SavedForLater {
+      // Kept with today's date, so the chart is right once it is sent.
+      if (!mounted) return;
+      showMessage(context, tr('No connection. Saved on this phone and will be sent when you are back online.'));
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {

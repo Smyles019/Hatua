@@ -215,6 +215,20 @@ class AssistantMessage(Base):
     created_at: Mapped[datetime] = _now()
 
 
+class IdempotentRequest(Base):
+    """A change the phone queued while offline, by the random key the phone gave it, with
+    the answer it got. Sending the same key again returns this answer (app.core.idempotency)."""
+    __tablename__ = "idempotent_requests"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    path: Mapped[str] = mapped_column(String(200))
+    status_code: Mapped[int] = mapped_column(Integer)
+    body: Mapped[str] = mapped_column(Text)
+    # Indexed for the daily clean-up of old keys.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
 class MilestoneSummary(Base):
     __tablename__ = "milestone_summaries"
 

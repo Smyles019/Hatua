@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import admin, assessments, assistant, auth, children, chw, dev, messages
 from app.core.config import settings
+from app.core.idempotency import IdempotencyMiddleware
 from app.services.i18n import _swahili
 
 settings.check()
@@ -23,6 +24,8 @@ app.include_router(messages.router, prefix="/messages", tags=["chat with a CHW"]
 app.include_router(assistant.router, prefix="/assistant", tags=["Hatua assistant"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 
+# Changes the phone queued while offline can arrive twice; the second gets the first's answer.
+app.add_middleware(IdempotencyMiddleware)
 app.add_middleware(CORSMiddleware,
                    allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
                    allow_methods=["*"], allow_headers=["*"])

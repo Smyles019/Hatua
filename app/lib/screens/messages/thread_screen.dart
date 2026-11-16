@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../api/models.dart';
+import '../../state/outbox.dart';
 import '../../state/session.dart';
 import '../../theme/colors.dart';
 import '../../theme/theme.dart';
@@ -72,18 +73,30 @@ class _ThreadScreenState extends State<ThreadScreen> {
     setState(() => _sending = true);
     final session = context.read<Session>();
     try {
-      final data = await session.api.post(_path, {
-        'body': body,
-        if (!widget.asChw && widget.predictionId != null) 'prediction_id': widget.predictionId,
-      });
+      final data = await session.sendOrQueue(
+        kind: 'message',
+        path: _path,
+        label: widget.asChw
+            ? tr('message to {name}', {'name': widget.caregiverName ?? ''})
+            : tr('message to your health worker'),
+        body: {
+          'body': body,
+          if (!widget.asChw && widget.predictionId != null) 'prediction_id': widget.predictionId,
+        },
+      );
       final thread = MessageThread.fromJson(data as Map<String, dynamic>);
       _text.clear();
       session.dataChanged();
       if (!mounted) return;
       setState(() => _future = Future.value(thread));
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
-      });
+      _toBottom();
+    } on SavedForLater {
+      // No signal: the message waits on the phone and shows below with a clock.
+      _text.clear();
+      if (!mounted) return;
+      showMessage(context, tr('No connection. Your message will be sent when you are back online.'));
+      setState(() {});
+      _toBottom();
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
@@ -91,8 +104,18 @@ class _ThreadScreenState extends State<ThreadScreen> {
     }
   }
 
+  void _toBottom() => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      });
+
+  int _version = -1;
+
   @override
   Widget build(BuildContext context) {
+    // Reload once queued messages have gone out (the session bumps dataVersion).
+    final session = context.watch<Session>();
+    if (_version != -1 && _version != session.dataVersion) _future = _load();
+    _version = session.dataVersion;
     return Scaffold(
       appBar: AppBar(
         title:
@@ -150,7 +173,7 @@ class _ThreadScreenState extends State<ThreadScreen> {
         ),
         const SizedBox(height: Space.s2),
       ],
-      if (thread.messages.isEmpty)
+      if (thread.messages.isEmpty && _waiting(context).isEmpty)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: Space.s6),
           child: Text(
@@ -164,8 +187,26 @@ class _ThreadScreenState extends State<ThreadScreen> {
       // A chat, not questions and answers: no "answered" line under the messages. The
       // CHW's chat list still shows which chats are waiting for them.
       for (final m in thread.messages) _Bubble(m),
+      for (final q in _waiting(context))
+        _Bubble(
+          ThreadMessage(
+            body: q.body['body'] as String,
+            fromMe: true,
+            senderRole: widget.asChw ? 'chw' : 'caregiver',
+            senderName: '',
+            createdAt: q.savedAt,
+          ),
+          waiting: true,
+        ),
     ]);
   }
+
+  /// This chat's messages written offline and not sent yet.
+  List<QueuedChange> _waiting(BuildContext context) => context
+      .read<Session>()
+      .queued
+      .where((q) => q.kind == 'message' && q.path == _path)
+      .toList();
 
   Widget _composer(BuildContext context) {
     return Padding(
@@ -196,8 +237,11 @@ class _ThreadScreenState extends State<ThreadScreen> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble(this.message);
+  const _Bubble(this.message, {this.waiting = false});
   final ThreadMessage message;
+
+  /// Written offline, still on this phone.
+  final bool waiting;
 
   @override
   Widget build(BuildContext context) {
@@ -222,11 +266,18 @@ class _Bubble extends StatelessWidget {
           ],
           Text(message.body, style: t.bodyMedium?.copyWith(color: fg)),
           const SizedBox(height: Space.s1),
-          Text(
-            '${mine ? 'You' : message.senderName} · '
-            '${DateFormat('d MMM, HH:mm').format(message.createdAt)}',
-            style: t.bodySmall?.copyWith(color: fg),
-          ),
+          if (waiting)
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.schedule_rounded, size: 14, color: fg),
+              const SizedBox(width: Space.s1),
+              Text(tr('Waiting to send'), style: t.bodySmall?.copyWith(color: fg)),
+            ])
+          else
+            Text(
+              '${mine ? tr('You') : message.senderName} · '
+              '${DateFormat('d MMM, HH:mm').format(message.createdAt)}',
+              style: t.bodySmall?.copyWith(color: fg),
+            ),
         ]),
       ),
     );

@@ -942,6 +942,26 @@
     "From the answers, hearing or eyes should be checked. ": "Kutokana na majibu, kusikia au macho kunapaswa kuangaliwa. ",
     "From the weight and height you entered, growth should be checked. ": "Kutokana na uzito na urefu ulioandika, ukuaji unapaswa kuangaliwa. ",
     "This is separate from the result and is not a diagnosis.": "Hili ni tofauti na matokeo na si utambuzi wa ugonjwa.",
-    "Hearing, eyes or growth need a look": "Kusikia, macho au ukuaji kunahitaji kuangaliwa"
+    "Hearing, eyes or growth need a look": "Kusikia, macho au ukuaji kunahitaji kuangaliwa",
+    "The assistant needs a connection. Please try again when you are back online.": "Msaidizi anahitaji mtandao. Tafadhali jaribu tena ukiwa na mtandao.",
+    "Some of your answers about {name}'s hearing and eyes need a health worker to look at them.": "Baadhi ya majibu yako kuhusu kusikia na macho ya {name} yanahitaji kuangaliwa na mhudumu wa afya.",
+    "Some of your answers about {name}'s hearing need a health worker to look at them.": "Baadhi ya majibu yako kuhusu kusikia kwa {name} yanahitaji kuangaliwa na mhudumu wa afya.",
+    "Some of your answers about {name}'s eyes need a health worker to look at them.": "Baadhi ya majibu yako kuhusu macho ya {name} yanahitaji kuangaliwa na mhudumu wa afya.",
+    "Please visit a health facility or show {name} to your community health worker soon. You do not need to wait for the result.": "Tafadhali tembelea kituo cha afya au mwonyeshe {name} kwa mhudumu wako wa afya ya jamii hivi karibuni. Huhitaji kusubiri matokeo.",
+    "{name}'s weight and height": "uzito na urefu wa {name}",
+    "No connection. Saved on this phone and will be sent when you are back online.": "Hakuna mtandao. Imehifadhiwa kwenye simu hii na itatumwa ukirudi mtandaoni.",
+    "outcome for {childName}": "matokeo ya ufuatiliaji wa {childName}",
+    "No connection. The outcome for {childName} is saved on this phone and will be sent when you are back online.": "Hakuna mtandao. Matokeo ya ufuatiliaji wa {childName} yamehifadhiwa kwenye simu hii na yatatumwa ukirudi mtandaoni.",
+    "message to {name}": "ujumbe kwa {name}",
+    "message to your health worker": "ujumbe kwa mhudumu wako wa afya",
+    "No connection. Your message will be sent when you are back online.": "Hakuna mtandao. Ujumbe wako utatumwa ukirudi mtandaoni.",
+    "Waiting to send": "Unasubiri kutumwa",
+    "The saved check for {names} could not be used. Please do the check again.": "Kipimo kilichohifadhiwa cha {names} hakikuweza kutumika. Tafadhali fanya kipimo tena.",
+    "Sent 1 change saved while offline.": "Imetuma badiliko 1 lililohifadhiwa bila mtandao.",
+    "Sent {n} changes saved while offline.": "Imetuma mabadiliko {n} yaliyohifadhiwa bila mtandao.",
+    "Could not send: {what}. Please try again.": "Haikuweza kutuma: {what}. Tafadhali jaribu tena.",
+    "Offline. Showing what was saved at {when}.": "Hakuna mtandao. Inaonyesha kilichohifadhiwa saa {when}.",
+    "1 change waiting to send.": "Badiliko 1 linasubiri kutumwa.",
+    "{n} changes waiting to send.": "Mabadiliko {n} yanasubiri kutumwa."
   }
 }

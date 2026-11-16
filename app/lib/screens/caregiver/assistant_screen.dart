@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/api_client.dart';
 import '../../api/models.dart';
+import '../../state/danger_words.dart';
 import '../../state/session.dart';
 import '../../theme/colors.dart';
 import '../../theme/theme.dart';
@@ -88,6 +90,25 @@ class _AssistantScreenState extends State<AssistantScreen> {
       if (!mounted) return;
       setState(() => _state = data as Map<String, dynamic>);
       _toEnd();
+    } on ApiException catch (e) {
+      // No connection, but a danger sign: answer on the phone, the same fixed reply the
+      // server gives. It is not saved to the conversation.
+      if (e.status == 0 && mentionsDangerSign(body) && _state != null && mounted) {
+        _text.clear();
+        setState(() => _state = {
+              ..._state!,
+              'messages': [
+                ...(_state!['messages'] as List),
+                {'role': 'user', 'body': body, 'flagged': false},
+                {'role': 'assistant', 'body': tr(urgentReply), 'flagged': true},
+              ],
+            });
+        _toEnd();
+      } else if (mounted) {
+        showError(context, e.status == 0
+            ? ApiException(0, tr('The assistant needs a connection. Please try again when you are back online.'))
+            : e);
+      }
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {

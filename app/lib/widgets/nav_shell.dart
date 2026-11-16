@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/colors.dart';
 import '../theme/theme.dart';
+import 'offline_banner.dart';
 
 class NavTab {
   NavTab(this.label, this.icon, this.builder);
@@ -51,10 +52,15 @@ class NavShellState extends State<NavShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: index,
-        children: [for (final t in widget.tabs) Builder(builder: t.builder)],
-      ),
+      body: Column(children: [
+        const OfflineBanner(), // only while showing what was saved on the phone
+        Expanded(
+          child: IndexedStack(
+            index: index,
+            children: [for (final t in widget.tabs) Builder(builder: t.builder)],
+          ),
+        ),
+      ]),
       floatingActionButton: widget.floatingButton,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: _Bar(

@@ -73,8 +73,11 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "send-reminders":
+        from app.core.idempotency import prune
         from app.services.notify import send_check_reminders
         print(f"{send_check_reminders(SessionLocal)} reminder(s) sent")
+        # The same daily run clears the offline-queue keys older than 30 days.
+        print(f"{prune(SessionLocal)} old offline key(s) removed")
         return 0
 
     if args.command == "add-test-emails":

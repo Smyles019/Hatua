@@ -24,6 +24,9 @@ Future<void> main() async {
   await Push.init(); // before the session, which registers the phone once signed in
   final session = Session(ApiClient())..restore();
   _wireNotifications(session);
+  // Things saved offline that went out by themselves once the phone was back online.
+  session.onSentInBackground = (msg) => _messenger.currentState
+      ?.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 5)));
   final theme = ThemeController()..restore();
   // Once someone is signed in, line the phone and the account up on one language.
   String? synced;

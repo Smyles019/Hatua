@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
+import '../i18n/strings.dart';
 import 'google_auth.dart';
+import 'outbox.dart';
 import 'pending_check.dart';
 import 'push.dart';
 
@@ -24,11 +26,94 @@ class NeedsVerification implements Exception {
 ///
 /// Note: SharedPreferences is not encrypted. flutter_secure_storage is the hardening
 /// step before any real deployment.
-class Session extends ChangeNotifier {
+class Session extends ChangeNotifier with WidgetsBindingObserver {
   Session(this.api) {
     api.onUnauthorised = () {
       if (user != null) signOut();
     };
+    // Back online: send what was saved, and reload the screens with fresh data.
+    api.onBackOnline = () {
+      unawaited(_sendInBackground());
+      dataChanged();
+    };
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Shows what a send in the background did (wired to the app's snackbar in main.dart).
+  void Function(String message)? onSentInBackground;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_sendInBackground());
+  }
+
+  Future<void> _sendInBackground() async {
+    final msg = (await sendPending()).message;
+    final quietWait = msg == tr('Still no connection. Your saved checks will be sent later.');
+    if (msg != null && !quietWait) onSentInBackground?.call(msg);
+  }
+
+  // While something is waiting, try again every minute (there is no reliable "signal is
+  // back" event on every phone, so a quiet retry is simpler and costs one request).
+  Timer? _retry;
+  void _scheduleRetry() {
+    if (waitingCount == 0 || user == null) {
+      _retry?.cancel();
+      _retry = null;
+    } else {
+      _retry ??= Timer.periodic(const Duration(minutes: 1), (_) => _sendInBackground());
+    }
+  }
+
+  int get waitingCount => pending.length + queued.length;
+
+  // ---- Other changes made offline (messages, growth, outcomes) ----
+
+  List<QueuedChange> queued = [];
+  String? get _kQueued => user == null ? null : 'hatua.queue.${user!.userId}';
+
+  Future<void> _loadQueued() async {
+    final key = _kQueued;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = key == null ? null : prefs.getString(key);
+    queued = raw == null
+        ? []
+        : (jsonDecode(raw) as List)
+            .map((j) => QueuedChange.fromJson(j as Map<String, dynamic>))
+            .toList();
+  }
+
+  Future<void> _storeQueued() async {
+    final key = _kQueued;
+    if (key == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (queued.isEmpty) {
+      await prefs.remove(key);
+    } else {
+      await prefs.setString(key, jsonEncode(queued.map((q) => q.toJson()).toList()));
+    }
+  }
+
+  /// Sends a change, or keeps it on the phone when there is no connection and throws
+  /// [SavedForLater]. Other errors (the server refused it) are thrown as usual.
+  Future<dynamic> sendOrQueue(
+      {required String kind,
+      required String path,
+      required Map<String, dynamic> body,
+      required String label}) async {
+    final change = QueuedChange(
+        key: newChangeKey(), kind: kind, path: path, body: body, label: label,
+        savedAt: DateTime.now());
+    try {
+      return await api.post(path, body, change.key);
+    } catch (e) {
+      if (classifySendError(e) != SendFailure.retryLater) rethrow;
+      queued = [...queued, change];
+      await _storeQueued();
+      _scheduleRetry();
+      notifyListeners();
+      throw SavedForLater();
+    }
   }
 
   final ApiClient api;
@@ -99,13 +184,15 @@ class Session extends ChangeNotifier {
   Future<void> savePending(PendingCheck check) async {
     pending = [...pending.where((p) => p.childId != check.childId), check];
     await _storePending();
+    _scheduleRetry();
     notifyListeners();
   }
 
-  /// Tries to send every saved check, oldest first. Safe to call often: does nothing
-  /// while a send is already running or when nothing is waiting.
+  /// Tries to send every saved check, then every other saved change, oldest first.
+  /// Safe to call often: does nothing while a send is already running or when nothing
+  /// is waiting.
   Future<SendReport> sendPending() async {
-    if (sendingPending || pending.isEmpty || user == null) return SendReport();
+    if (sendingPending || waitingCount == 0 || user == null) return SendReport();
     sendingPending = true;
     notifyListeners();
     final sent = <String>[], rejected = <String>[];
@@ -118,7 +205,8 @@ class Session extends ChangeNotifier {
         continue;
       }
       try {
-        await api.post('/assessments', {'child_id': p.childId, 'responses': p.responses});
+        await api.post(
+            '/assessments', {'child_id': p.childId, 'responses': p.responses}, p.key);
         sent.add(p.childName);
       } catch (e) {
         switch (classifySendError(e)) {
@@ -135,13 +223,44 @@ class Session extends ChangeNotifier {
     }
     pending = keep;
     await _storePending();
+
+    // Then messages, growth entries and outcomes, in the order they were made.
+    var changesSent = 0;
+    final refused = <String>[];
+    final keepChanges = <QueuedChange>[];
+    for (final c in queued) {
+      if (stop) {
+        keepChanges.add(c);
+        continue;
+      }
+      try {
+        await api.post(c.path, c.body, c.key);
+        changesSent++;
+      } catch (e) {
+        if (classifySendError(e) == SendFailure.rejected) {
+          refused.add(c.label);
+        } else {
+          keepChanges.add(c);
+          stop = true;
+        }
+      }
+    }
+    queued = keepChanges;
+    await _storeQueued();
+
     sendingPending = false;
-    if (sent.isNotEmpty) {
+    _scheduleRetry();
+    if (sent.isNotEmpty || changesSent > 0) {
       dataChanged(); // also notifies
     } else {
       notifyListeners();
     }
-    return SendReport(sent: sent, rejected: rejected, stillWaiting: keep.length);
+    return SendReport(
+        sent: sent,
+        rejected: rejected,
+        stillWaiting: keep.length + keepChanges.length,
+        changesSent: changesSent,
+        changesRefused: refused);
   }
 
   Future<void> restore() async {
@@ -152,8 +271,11 @@ class Session extends ChangeNotifier {
     if (token != null && userJson != null) {
       api.token = token;
       user = AppUser.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
+      api.cacheUser = user!.userId;
     }
     await _loadPending();
+    await _loadQueued();
+    _scheduleRetry();
     restored = true;
     notifyListeners();
     // Already signed in from last time: make sure this phone still gets notifications.
@@ -221,7 +343,10 @@ class Session extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kToken, api.token!);
     await prefs.setString(_kUser, jsonEncode(user!.toJson()));
+    api.cacheUser = user!.userId;
     await _loadPending();
+    await _loadQueued();
+    _scheduleRetry();
     notifyListeners();
     unawaited(Push.signedIn(api)); // this phone now gets this person's notifications
   }
@@ -244,8 +369,16 @@ class Session extends ChangeNotifier {
     await Push.signingOut(api); // first, while the session still works
     await GoogleAuth.signOut();
     api.token = null;
+    // The copies kept for reading offline go (a shared phone shows nothing of this
+    // person's); what is waiting to be sent stays for their next sign-in.
+    final leaving = user?.userId;
+    if (leaving != null) await ApiClient.forgetSaved(leaving);
+    api.cacheUser = null;
+    api.savedDataFrom.value = null;
     user = null;
     pending = []; // still stored for this user; reloaded on their next sign-in
+    queued = [];
+    _scheduleRetry();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kToken);
     await prefs.remove(_kUser);

@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../i18n/strings.dart';
 
 /// Base URL of the FastAPI backend. The Android emulator reaches the host machine at
@@ -58,11 +59,68 @@ class ApiClient {
     return Uri.parse('$apiBaseUrl$path').replace(queryParameters: q.isEmpty ? null : q);
   }
 
-  Future<dynamic> get(String path, [Map<String, String?>? query]) =>
-      _send(() => _http.get(_uri(path, query), headers: _headers));
+  // ---- Offline reading ----
+  //
+  // Every answer to a GET is kept on the phone, per signed-in account (cacheUser). With
+  // no connection, get() returns the kept copy instead of failing, and [savedDataFrom]
+  // says how old the oldest copy on screen is, for the "offline" banner. The first
+  // request that reaches the server clears it again and calls [onBackOnline].
 
-  Future<dynamic> post(String path, [Object? body]) =>
-      _send(() => _http.post(_uri(path), headers: _headers, body: jsonEncode(body ?? {})));
+  /// The signed-in account whose copies are used; null keeps nothing.
+  String? cacheUser;
+
+  /// Null while online; when showing kept copies, the time the oldest was saved.
+  final savedDataFrom = ValueNotifier<DateTime?>(null);
+
+  /// Called when a request succeeds after one failed for lack of a connection.
+  void Function()? onBackOnline;
+  bool _unreachable = false;
+
+  static const _cachePrefix = 'hatua.cache.';
+
+  String? _cacheKey(Uri uri) {
+    if (cacheUser == null || uri.path.startsWith('/auth/')) return null;
+    return '$_cachePrefix$cacheUser.${uri.path}?${uri.query}';
+  }
+
+  Future<dynamic> get(String path, [Map<String, String?>? query]) async {
+    final uri = _uri(path, query);
+    final key = _cacheKey(uri);
+    try {
+      final data = await _send(() => _http.get(uri, headers: _headers));
+      if (key != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+            key, jsonEncode({'at': DateTime.now().toIso8601String(), 'data': data}));
+      }
+      return data;
+    } on ApiException catch (e) {
+      if (e.status != 0 || key == null) rethrow;
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (raw == null) rethrow;
+      final saved = jsonDecode(raw) as Map<String, dynamic>;
+      final at = DateTime.parse(saved['at'] as String);
+      final shown = savedDataFrom.value;
+      if (shown == null || at.isBefore(shown)) savedDataFrom.value = at;
+      return saved['data'];
+    }
+  }
+
+  /// Removes every kept copy for [user] (on sign out, so a shared phone shows nothing).
+  static Future<void> forgetSaved(String user) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final k in prefs.getKeys().where((k) => k.startsWith('$_cachePrefix$user.'))) {
+      await prefs.remove(k);
+    }
+  }
+
+  /// Sends a change. [idempotencyKey] is for changes queued while offline: the server
+  /// saves the change once even if it arrives twice.
+  Future<dynamic> post(String path, [Object? body, String? idempotencyKey]) => _send(() =>
+      _http.post(_uri(path),
+          headers: {..._headers, if (idempotencyKey != null) 'Idempotency-Key': idempotencyKey},
+          body: jsonEncode(body ?? {})));
 
   Future<dynamic> put(String path, [Object? body]) =>
       _send(() => _http.put(_uri(path), headers: _headers, body: jsonEncode(body ?? {})));
@@ -78,10 +136,17 @@ class ApiClient {
     try {
       res = await call().timeout(_timeout);
     } on TimeoutException {
+      _unreachable = true;
       throw ApiException(0, tr('The connection is slow. Please try again.'));
     } on http.ClientException {
       // Also covers socket errors on Android and failed fetches on the web.
+      _unreachable = true;
       throw ApiException(0, tr('No connection. Check your data or Wi-Fi and try again.'));
+    }
+    if (_unreachable || savedDataFrom.value != null) {
+      _unreachable = false;
+      savedDataFrom.value = null;
+      onBackOnline?.call();
     }
 
     final text = utf8.decode(res.bodyBytes);
