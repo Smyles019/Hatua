@@ -109,3 +109,13 @@ def test_switched_off_and_clearing(client, monkeypatch, db_session):
     assert client.get("/assistant", headers=cg).json()["messages"] == []
     _, chw_phone = make_user(db_session, "chw")
     assert client.get("/assistant", headers=login(client, chw_phone)).status_code == 403
+
+
+def test_an_openrouter_key_goes_to_openrouter(monkeypatch):
+    monkeypatch.setattr(settings, "openai_model", "gpt-4o-mini")
+    monkeypatch.setattr(settings, "openai_api_key", "sk-or-v1-abc")
+    assert assistant.endpoint() == ("https://openrouter.ai/api/v1/chat/completions",
+                                    "openai/gpt-4o-mini", True)
+    monkeypatch.setattr(settings, "openai_api_key", "sk-proj-abc")
+    assert assistant.endpoint() == ("https://api.openai.com/v1/chat/completions",
+                                    "gpt-4o-mini", False)

@@ -1,5 +1,6 @@
 """The Hatua assistant: answers caregivers' questions about child development, play and
-general child health, through the OpenAI API.
+general child health, through the OpenAI API (or OpenRouter, which serves the same
+models: an sk-or- key is sent there).
 
 Safety, in order:
 1. Danger signs first, without the AI. A message that mentions a danger sign from the MOH
@@ -25,7 +26,8 @@ from app.core.config import settings
 from app.services.i18n import tr
 
 log = logging.getLogger("uvicorn.error")
-URL = "https://api.openai.com/v1/chat/completions"
+OPENAI = "https://api.openai.com/v1"
+OPENROUTER = "https://openrouter.ai/api/v1"
 HISTORY = 10  # earlier messages sent along, so follow-up questions make sense
 EAT = timezone(timedelta(hours=3))
 
@@ -90,6 +92,17 @@ def day_start() -> datetime:
     return datetime.combine(datetime.now(EAT).date(), time.min, EAT)
 
 
+def endpoint() -> tuple[str, str, bool]:
+    """(chat completions URL, model, via OpenRouter). An OpenRouter key (sk-or-...) is
+    sent to OpenRouter, which serves the same OpenAI models with the same API."""
+    via_openrouter = settings.openai_api_key.startswith("sk-or-")
+    base = OPENROUTER if via_openrouter else OPENAI
+    model = settings.openai_model
+    if via_openrouter and "/" not in model:
+        model = "openai/" + model  # OpenRouter names models by provider
+    return f"{base}/chat/completions", model, via_openrouter
+
+
 def ask(history: list[tuple[str, str]], question: str, lang: str,
         age_months: int | None) -> str:
     """history: earlier (role, text) pairs, oldest first. Returns the assistant's reply."""
@@ -101,11 +114,15 @@ def ask(history: list[tuple[str, str]], question: str, lang: str,
     messages = [{"role": "system", "content": system}]
     messages += [{"role": r, "content": t} for r, t in history[-HISTORY:]]
     messages.append({"role": "user", "content": question})
+    url, model, via_openrouter = endpoint()
+    headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+    if via_openrouter:
+        headers["X-Title"] = "Hatua"
+    # OpenRouter takes max_tokens; OpenAI's newer models only max_completion_tokens.
+    limit = {"max_tokens" if via_openrouter else "max_completion_tokens": 400}
     try:
-        r = requests.post(URL, timeout=30, headers={
-            "Authorization": f"Bearer {settings.openai_api_key}"}, json={
-            "model": settings.openai_model, "messages": messages,
-            "max_completion_tokens": 400})
+        r = requests.post(url, timeout=30, headers=headers,
+                          json={"model": model, "messages": messages, **limit})
         r.raise_for_status()
         reply = r.json()["choices"][0]["message"]["content"].strip()
     except (requests.RequestException, KeyError, IndexError, ValueError, AttributeError) as e:
