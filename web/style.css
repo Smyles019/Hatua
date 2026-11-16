@@ -268,6 +268,9 @@ label.pick:has(input:focus-visible) { outline: 3px solid var(--sun-500); }
 .bubble.me { background: var(--plum-700); color: var(--on-ink); margin-left: auto;
   border-radius: 1.1rem 1.1rem .35rem 1.1rem; }
 .bubble small { display: block; opacity: .8; margin-top: .25rem; font-size: .8rem; }
+/* The assistant's fixed "go to a health facility now" reply to a danger sign */
+.bubble.urgent { background: var(--high-bg); border: 2px solid var(--high); }
+.bubble.urgent .material-symbols-rounded { color: var(--high); vertical-align: -5px; margin-right: .35rem; }
 .status { text-align: center; color: var(--muted); font-size: .88rem; }
 
 /* ---------- the check ---------- */

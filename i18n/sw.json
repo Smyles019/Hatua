@@ -182,6 +182,7 @@
     "squatting to pick things up": "kuinama kuokota vitu"
   },
   "common": {
+    "This could be a danger sign. Take your child to a health facility now. Do not wait for an answer here. If you can, call your community health worker on the way.": "Hii inaweza kuwa dalili ya hatari. Mpeleke mtoto wako kwenye kituo cha afya sasa. Usisubiri jibu hapa. Ukiweza, mpigie mhudumu wako wa afya ya jamii ukiwa njiani.",
     "{caregiver} sent you a message.": "{caregiver} amekutumia ujumbe.",
     "Your health worker sent you a message.": "Mhudumu wako wa afya amekutumia ujumbe.",
     "A check needs your review": "Ukaguzi unasubiri uangalie",
@@ -246,6 +247,9 @@
     "don't know": "sijui"
   },
   "web": {
+    "About which child": "Kuhusu mtoto yupi",
+    "No child in particular": "Hakuna mtoto maalum",
+    "Questions about growth, play and everyday care.": "Maswali kuhusu ukuaji, michezo na malezi ya kila siku.",
     "Chat with your own health worker": "Zungumza na mhudumu wako wa afya",
     "Community health workers review flagged checks and chat with caregivers.": "Wahudumu wa afya ya jamii hukagua ukaguzi ulioalamishwa na kuzungumza na walezi.",
     "Each caregiver needs a health worker, or their flagged results and messages reach nobody.": "Kila mlezi anahitaji mhudumu wa afya, la sivyo matokeo yaliyoalamishwa na ujumbe wao haumfikii mtu yeyote.",
@@ -534,6 +538,19 @@
     "Write your question. Your health worker replies here.": "Andika swali lako. Mhudumu wako wa afya atajibu hapa."
   },
   "app": {
+    "Hatua assistant": "Msaidizi wa Hatua",
+    "Growth, play and care": "Ukuaji, michezo na malezi",
+    "Clear conversation": "Futa mazungumzo",
+    "Clear this conversation?": "Futa mazungumzo haya?",
+    "Your questions and the answers are deleted from your account.": "Maswali yako na majibu yatafutwa kwenye akaunti yako.",
+    "Clear": "Futa",
+    "Answers come from AI and can be wrong. It does not diagnose or suggest medicines, and it is not for emergencies. Do not type names or other personal details.": "Majibu yanatoka kwa AI na yanaweza kuwa na makosa. Haitambui magonjwa wala haipendekezi dawa, na si kwa dharura. Usiandike majina au taarifa nyingine za kibinafsi.",
+    "Ask about how your child is growing, play ideas, feeding, sleep or everyday care.": "Uliza kuhusu jinsi mtoto wako anavyokua, mawazo ya michezo, kulisha, usingizi au malezi ya kila siku.",
+    "Writing an answer...": "Inaandika jibu...",
+    "The assistant is not switched on yet.": "Msaidizi bado haujawashwa.",
+    "About:": "Kuhusu:",
+    "Ask a question": "Uliza swali",
+    "{used} of {limit} questions today": "Maswali {used} kati ya {limit} leo",
     "Chat with your health worker": "Zungumza na mhudumu wako wa afya",
     "Send a message": "Tuma ujumbe",
     "Chats with caregivers": "Mazungumzo na walezi",

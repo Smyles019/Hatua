@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # key (JSON). Empty: nothing is sent; notifications are logged and kept in
     # app.core.push.outbox instead, as emails are without SMTP.
     firebase_credentials: str = ""
+    # The Hatua assistant (app.services.assistant). Empty key: the assistant is off and
+    # its screen says so. The model can be changed without code changes.
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    assistant_daily_limit: int = 30  # messages per caregiver per day, to protect credit
 
     @property
     def google_audiences(self) -> list[str]:

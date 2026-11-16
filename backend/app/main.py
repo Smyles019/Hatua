@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import admin, assessments, auth, children, chw, dev, messages
+from app.api.routes import admin, assessments, assistant, auth, children, chw, dev, messages
 from app.core.config import settings
 from app.services.i18n import _swahili
 
@@ -19,7 +19,8 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(children.router, prefix="/children", tags=["children"])
 app.include_router(assessments.router, prefix="/assessments", tags=["assessments"])
 app.include_router(chw.router, prefix="/chw", tags=["chw"])
-app.include_router(messages.router, prefix="/messages", tags=["ask a CHW"])
+app.include_router(messages.router, prefix="/messages", tags=["chat with a CHW"])
+app.include_router(assistant.router, prefix="/assistant", tags=["Hatua assistant"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 
 app.add_middleware(CORSMiddleware,

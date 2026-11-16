@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer,
-                        MetaData, String, false, func, text, true)
+                        MetaData, String, Text, false, func, text, true)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -190,6 +190,28 @@ class Message(Base):
     prediction_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("prediction_results.prediction_id", ondelete="SET NULL"))
     body: Mapped[str] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = _now()
+
+
+ASSISTANT_ROLES = ("user", "assistant")
+
+
+class AssistantMessage(Base):
+    """The Hatua assistant (app.services.assistant): a caregiver's saved conversation
+    with the AI. Kept apart from Message, the CHW chat, so the two never mix."""
+    __tablename__ = "assistant_messages"
+    __table_args__ = (CheckConstraint(_in("role", ASSISTANT_ROLES), name="role_valid"),)
+
+    message_id: Mapped[uuid.UUID] = _uuid()
+    caregiver_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="CASCADE"), index=True)
+    # The child a question was about; only their age is sent to the AI.
+    child_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("children.child_id", ondelete="SET NULL"))
+    role: Mapped[str] = mapped_column(String(10))
+    body: Mapped[str] = mapped_column(Text)
+    # Answered with the fixed "go to a health facility now" reply (a danger sign).
+    flagged: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     created_at: Mapped[datetime] = _now()
 
 

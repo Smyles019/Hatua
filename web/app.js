@@ -1098,6 +1098,45 @@ async function cgAsk() {
     { predictionId: about ? about.id : null });
 }
 
+/** The Hatua assistant (backend/app/services/assistant.py has the safety design). Only
+ * the chosen child's age goes with a question, never a name. */
+async function cgAssistant() {
+  const [s, children] = await Promise.all([api('/assistant'), api('/children')]);
+  const text = h('textarea', { rows: 3, maxlength: 1000, 'aria-label': t('Your question'), placeholder: t('Ask a question') });
+  const about = h('select', { 'aria-label': t('About which child') }, h('option', { value: '' }, t('No child in particular')),
+    children.map((c) => h('option', { value: c.child_id }, c.first_name + ', ' + ageLabel(c.age_months))));
+  const send = h('button', {}, icon('send'), t('Send'));
+  send.addEventListener('click', () => run(send, async () => {
+    if (!text.value.trim()) throw new Error(t('Write a message first.'));
+    send.lastChild.textContent = t('Writing an answer...');
+    await api('/assistant', { method: 'POST', body: { body: text.value, child_id: about.value || undefined } });
+    await cgAssistant();
+  }));
+  const clear = s.messages.length ? h('button', { class: 'second small', onclick: (ev) => run(ev.target, async () => {
+    if (!window.confirm(t('Clear this conversation?'))) return;
+    await api('/assistant', { method: 'DELETE' });
+    await cgAssistant();
+  }) }, icon('delete'), t('Clear conversation')) : null;
+  const conversation = h('div', { class: 'card' },
+    s.messages.length
+      ? h('div', { class: 'thread' }, s.messages.map((m) => h('div', { class: 'bubble' + (m.role === 'user' ? ' me' : '') + (m.flagged && m.role !== 'user' ? ' urgent' : '') },
+          m.flagged && m.role !== 'user' ? icon('emergency') : null, m.body)))
+      : empty(t('Ask about how your child is growing, play ideas, feeding, sleep or everyday care.'), 'auto_awesome'),
+    s.available
+      ? h('div', {}, field(t('About'), about), text, h('p', {}, send, ' ', h('span', { class: 'muted' },
+          t('{used} of {limit} questions today', { used: s.used_today, limit: s.daily_limit }))))
+      : h('p', { class: 'muted' }, t('The assistant is not switched on yet.')));
+  const side = h('div', {},
+    h('div', { class: 'note' }, icon('info'), h('div', {},
+      t('Answers come from AI and can be wrong. It does not diagnose or suggest medicines, and it is not for emergencies. Do not type names or other personal details.'),
+      h('p', {}, h('a', { href: '#ask' }, t('Chat with your health worker'))))),
+    h('div', { class: 'alert' }, icon('emergency'), h('div', {},
+      h('b', {}, t('Go to a health facility now, and do not wait for a reply, if your child:')),
+      h('ul', { class: 'plain' }, DANGER.map((d) => h('li', {}, d))))));
+  page({ title: t('Hatua assistant'), sub: t('Questions about growth, play and everyday care.'), chips: clear },
+    h('div', { class: 'split' }, conversation, side));
+}
+
 // ---------- pages by role, and the router ----------
 
 const PAGES = {
@@ -1106,7 +1145,8 @@ const PAGES = {
     ['reports', t('Reports'), 'description', adminReports]],
   chw: [['home', t('Home'), 'home', chwHome], ['families', t('My families'), 'family_restroom', chwFamilies],
     ['questions', t('Chats'), 'chat_bubble', chwQuestions], ['reviewed', t('Reviewed'), 'fact_check', chwReviewed]],
-  caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Chat with your health worker'), 'chat_bubble', cgAsk]],
+  caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Chat with your health worker'), 'chat_bubble', cgAsk],
+    ['assistant', t('Hatua assistant'), 'auto_awesome', cgAssistant]],
 };
 const DETAIL = {
   chw: { case: chwCase, thread: async (id) => {

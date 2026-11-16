@@ -11,6 +11,7 @@ import '../../widgets/risk_chip.dart';
 import '../../widgets/sprout.dart';
 import '../messages/thread_screen.dart';
 import 'add_child_screen.dart';
+import 'assistant_screen.dart';
 import 'care_schedule.dart';
 import 'caregiver_data.dart';
 import 'caregiver_shell.dart';
@@ -192,6 +193,14 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
             subtitle: tr('Send a message'),
             onTap: () => Navigator.of(context)
                 .push(MaterialPageRoute(builder: (_) => const ThreadScreen())),
+          ),
+          _Tool(
+            icon: Icons.auto_awesome_outlined,
+            color: context.hc.sky100,
+            title: tr('Hatua assistant'),
+            subtitle: tr('Growth, play and care'),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => AssistantScreen(childId: item.child.childId))),
           ),
         ],
       ),
