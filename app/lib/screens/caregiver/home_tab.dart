@@ -454,7 +454,9 @@ class _Tool extends StatelessWidget {
           width: 40,
           height: 40,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          child: Icon(icon, color: context.hc.onBright, size: 22),
+          // The circles are pale tints in light mode and dark tints in dark mode, so the
+          // icon takes the text colour (dark, or near-white in dark mode), not onBright.
+          child: Icon(icon, color: context.hc.plum900, size: 22),
         ),
         const SizedBox(height: Space.s3),
         Text(title, style: t.labelLarge),
