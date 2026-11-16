@@ -75,12 +75,21 @@ Rules you must always follow:
 - Do not ask for, use or repeat names, phone numbers or other personal details.
 - For anything not about children's development, care or health, or about Hatua, say kindly that you can only help with those.
 - Keep answers short (under 120 words), warm and in plain words. Use at most 4 short points.
+- Write plain text only: no markdown, no asterisks, no bold, no headings. For points, start each line with a dash.
 - Answer in {language}."""
 
 
 def mentions_danger_sign(text: str) -> bool:
     t = " ".join(text.lower().split())
     return any(p.search(t) for p in DANGER)
+
+
+def plain(text: str) -> str:
+    """The app and website show answers as plain text, so markdown the model still adds
+    (**bold**, # headings) is taken out."""
+    text = re.sub(r"\*\*(.+?)\*\*|__(.+?)__", lambda m: m.group(1) or m.group(2), text)
+    text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def urgent_reply(lang: str) -> str:
@@ -124,7 +133,7 @@ def ask(history: list[tuple[str, str]], question: str, lang: str,
         r = requests.post(url, timeout=30, headers=headers,
                           json={"model": model, "messages": messages, **limit})
         r.raise_for_status()
-        reply = r.json()["choices"][0]["message"]["content"].strip()
+        reply = plain(r.json()["choices"][0]["message"]["content"])
     except (requests.RequestException, KeyError, IndexError, ValueError, AttributeError) as e:
         status = getattr(getattr(e, "response", None), "status_code", None)
         log.warning("assistant: OpenAI call failed (%s %s)", type(e).__name__, status)

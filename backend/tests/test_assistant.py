@@ -119,3 +119,8 @@ def test_an_openrouter_key_goes_to_openrouter(monkeypatch):
     monkeypatch.setattr(settings, "openai_api_key", "sk-proj-abc")
     assert assistant.endpoint() == ("https://api.openai.com/v1/chat/completions",
                                     "gpt-4o-mini", False)
+
+
+def test_markdown_is_taken_out_of_answers():
+    raw = "## Ideas\n1. **Push toys**: build strength.\n\n\n2. __Songs__ help."
+    assert assistant.plain(raw) == "Ideas\n1. Push toys: build strength.\n\n2. Songs help."
