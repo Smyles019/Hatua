@@ -59,6 +59,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
             .map((c) => Child.fromJson(c as Map<String, dynamic>))
             .toList();
         if (_childId != null && !_children.any((c) => c.childId == _childId)) _childId = null;
+        // One child: they are who the questions are about, unless the caregiver says not.
+        if (_childId == null && (_state!['messages'] as List).isEmpty && _children.length == 1) {
+          _childId = _children.first.childId;
+        }
         _error = null;
       });
       _toEnd();
@@ -245,11 +249,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
             icon: const Icon(Icons.send_rounded),
           ),
         ]),
-        const SizedBox(height: Space.s1),
-        Text(
-          tr('{used} of {limit} questions today', {'used': s['used_today'], 'limit': s['daily_limit']}),
-          style: t.bodySmall,
-        ),
       ]),
     );
   }

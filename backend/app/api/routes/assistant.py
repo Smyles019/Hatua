@@ -37,10 +37,9 @@ def _state(db: Session, user: User) -> dict:
     rows = db.scalars(select(AssistantMessage)
                       .where(AssistantMessage.caregiver_id == user.user_id)
                       .order_by(AssistantMessage.created_at, AssistantMessage.role.desc())).all()
+    # The daily limit is enforced but not shown, so it does not read as a quota to use up.
     return {
         "available": bool(settings.openai_api_key),
-        "daily_limit": settings.assistant_daily_limit,
-        "used_today": _used_today(db, user),
         "messages": [{"message_id": m.message_id, "role": m.role, "body": m.body,
                       "flagged": m.flagged, "child_id": m.child_id,
                       "created_at": m.created_at} for m in rows],
@@ -59,9 +58,8 @@ def ask(body: AssistantIn, user: User = Depends(caregiver_only), db: Session = D
         raise HTTPException(422, "write a message first")
     child = get_child(body.child_id, user, db) if body.child_id else None
     if _used_today(db, user) >= settings.assistant_daily_limit:
-        raise HTTPException(429, f"you have reached today's limit of "
-                                 f"{settings.assistant_daily_limit} messages; try again "
-                                 "tomorrow, or message your health worker")
+        raise HTTPException(429, "you have reached today's limit for the assistant; try "
+                                 "again tomorrow, or message your health worker")
     flagged = assistant.mentions_danger_sign(question)
     if flagged:
         # Fixed reply, no AI: works even when the assistant is switched off.

@@ -25,6 +25,7 @@ class NavShell extends StatefulWidget {
     this.centreIcon,
     this.onCentre,
     this.centreBadge,
+    this.floatingButton,
   }) : assert((centreLabel == null) == (onCentre == null) &&
             (centreIcon == null) == (onCentre == null));
 
@@ -33,6 +34,10 @@ class NavShell extends StatefulWidget {
   final IconData? centreIcon;
   final void Function(BuildContext context)? onCentre;
   final int? centreBadge;
+
+  /// A round button in the bottom-right corner, just above the bar, on every tab
+  /// (the caregiver's Hatua assistant).
+  final Widget? floatingButton;
 
   @override
   State<NavShell> createState() => NavShellState();
@@ -50,6 +55,8 @@ class NavShellState extends State<NavShell> {
         index: index,
         children: [for (final t in widget.tabs) Builder(builder: t.builder)],
       ),
+      floatingActionButton: widget.floatingButton,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: _Bar(
         tabs: widget.tabs,
         index: index,

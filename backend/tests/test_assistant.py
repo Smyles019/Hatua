@@ -44,7 +44,7 @@ def test_answers_and_keeps_the_conversation(client, openai):
                                                    "child_id": child["child_id"]})
     assert r.status_code == 200, r.text
     s = r.json()
-    assert s["available"] and s["used_today"] == 1
+    assert s["available"] and "daily_limit" not in s and "used_today" not in s
     assert [(m["role"], m["body"]) for m in s["messages"]] == [
         ("user", "How can I help him talk more?"), ("assistant", "Try singing songs together.")]
     [sent] = openai.sent
@@ -95,6 +95,7 @@ def test_limits_errors_and_ownership(client, openai, monkeypatch):
     client.post("/assistant", headers=cg, json={"body": "two"})
     r = client.post("/assistant", headers=cg, json={"body": "three"})
     assert r.status_code == 429 and "limit" in r.json()["detail"]
+    assert "2" not in r.json()["detail"]  # the number itself is never shown
 
 
 def test_switched_off_and_clearing(client, monkeypatch, db_session):

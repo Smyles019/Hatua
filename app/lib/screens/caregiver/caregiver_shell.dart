@@ -3,12 +3,14 @@ import 'package:provider/provider.dart';
 
 import '../../api/models.dart';
 import '../../state/session.dart';
+import '../../theme/colors.dart';
 import '../../theme/theme.dart';
 import '../../widgets/child_avatar.dart';
 import '../../widgets/common.dart';
 import '../../widgets/nav_shell.dart';
 import '../profile_screen.dart';
 import 'add_child_screen.dart';
+import 'assistant_screen.dart';
 import 'check_screen.dart';
 import 'children_tab.dart';
 import 'history_tab.dart';
@@ -30,6 +32,19 @@ class CaregiverShell extends StatelessWidget {
       centreLabel: tr('Start check'),
       centreIcon: Icons.add_rounded,
       onCentre: startCheck,
+      // The Hatua assistant, one tap away from every tab.
+      floatingButton: Builder(
+        builder: (context) => FloatingActionButton(
+          heroTag: 'hatua-assistant',
+          tooltip: tr('Hatua assistant'),
+          backgroundColor: context.hc.plum700,
+          foregroundColor: context.hc.onPrimary,
+          shape: const CircleBorder(),
+          onPressed: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const AssistantScreen())),
+          child: const Icon(Icons.auto_awesome),
+        ),
+      ),
     );
   }
 }

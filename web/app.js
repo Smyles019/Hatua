@@ -1123,8 +1123,7 @@ async function cgAssistant() {
           m.flagged && m.role !== 'user' ? icon('emergency') : null, m.body)))
       : empty(t('Ask about how your child is growing, play ideas, feeding, sleep or everyday care.'), 'auto_awesome'),
     s.available
-      ? h('div', {}, field(t('About'), about), text, h('p', {}, send, ' ', h('span', { class: 'muted' },
-          t('{used} of {limit} questions today', { used: s.used_today, limit: s.daily_limit }))))
+      ? h('div', {}, field(t('About'), about), text, h('p', {}, send))
       : h('p', { class: 'muted' }, t('The assistant is not switched on yet.')));
   const side = h('div', {},
     h('div', { class: 'note' }, icon('info'), h('div', {},
@@ -1145,8 +1144,7 @@ const PAGES = {
     ['reports', t('Reports'), 'description', adminReports]],
   chw: [['home', t('Home'), 'home', chwHome], ['families', t('My families'), 'family_restroom', chwFamilies],
     ['questions', t('Chats'), 'chat_bubble', chwQuestions], ['reviewed', t('Reviewed'), 'fact_check', chwReviewed]],
-  caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Chat with your health worker'), 'chat_bubble', cgAsk],
-    ['assistant', t('Hatua assistant'), 'auto_awesome', cgAssistant]],
+  caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Chat with your health worker'), 'chat_bubble', cgAsk]],
 };
 const DETAIL = {
   chw: { case: chwCase, thread: async (id) => {
@@ -1157,16 +1155,29 @@ const DETAIL = {
   caregiver: { child: cgChild, check: cgCheck, edit: cgEditChild },
 };
 // Pages with no menu entry and no id in the address.
-const HIDDEN = { caregiver: { 'add-child': cgAddChild } };
+// The assistant opens from the round button in the corner (assistantButton).
+const HIDDEN = { caregiver: { 'add-child': cgAddChild, assistant: cgAssistant } };
+
+/** The round Hatua assistant button in the bottom-right corner, on caregiver pages. */
+function assistantButton(show) {
+  let fab = document.getElementById('assistant-fab');
+  if (!fab) {
+    fab = h('a', { id: 'assistant-fab', class: 'fab', href: '#assistant', title: t('Hatua assistant'),
+      'aria-label': t('Hatua assistant') }, icon('auto_awesome'));
+    document.body.append(fab);
+  }
+  fab.hidden = !show;
+}
 
 async function route() {
-  if (!me) return;
+  if (!me) { assistantButton(false); return; }
   const pages = PAGES[me.role];
   const [name, id] = location.hash.replace(/^#/, '').split('/');
   const pg = pages.find((p) => p[0] === name);
   const hidden = !id && HIDDEN[me.role] && HIDDEN[me.role][name];
   const detail = id ? DETAIL[me.role] && DETAIL[me.role][name] : hidden && (() => hidden());
   if (!pg && !detail) { location.hash = pages[0][0]; return; }
+  assistantButton(me.role === 'caregiver' && name !== 'assistant');
   document.getElementById('nav').replaceChildren(...pages.map((p) =>
     h('a', { href: '#' + p[0], class: p[0] === name ? 'on' : '', 'aria-current': p[0] === name ? 'page' : null }, icon(p[2]), p[1])));
   main().replaceChildren(h('p', { class: 'muted' }, t('Loading...')));
