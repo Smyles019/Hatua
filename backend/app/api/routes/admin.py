@@ -1,4 +1,5 @@
-"""Administrator endpoints (#17): accounts, caregiver-to-CHW links, usage summary.
+"""Administrator endpoints (#17): accounts, CHW invites, caregiver-to-CHW links, usage
+summary.
 
 Accounts are deactivated, never deleted: a CHW's recorded outcomes must keep their
 reviewer, and a deactivated account simply cannot sign in.
@@ -11,10 +12,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require
-from app.api.routes.auth import add_user
+from app.api.routes.auth import add_user, send_invite
 from app.db.models import CHW_OUTCOMES, RISK_LEVELS, ROLES, CaregiverInput, Child, PredictionResult, User
 from app.db.session import get_db
-from app.schemas.users import LinkChw, NewUser, UsageSummary, UserOut, UserUpdate
+from app.schemas.users import (ChwOut, LinkChw, NewChw, NewUser, UsageSummary, UserOut,
+                               UserUpdate)
 
 router = APIRouter()
 admin_only = require("admin")
@@ -26,6 +28,50 @@ def create_user(body: NewUser, _: User = Depends(admin_only), db: Session = Depe
     return add_user(db, full_name=body.full_name, email=body.email,
                     phone_number=body.phone_number, password=body.password, role=body.role,
                     email_verified=True)
+
+
+# ---- CHWs: invite by name and email ----
+
+@router.get("/chws", response_model=list[ChwOut])
+def list_chws(_: User = Depends(admin_only), db: Session = Depends(get_db)):
+    """Every CHW, newest first, with how many active caregivers each has. A CHW whose
+    invite_pending is true has not set up their account yet."""
+    linked = dict(db.execute(select(User.linked_chw_id, func.count())
+                             .where(User.role == "caregiver", User.is_active,
+                                    User.linked_chw_id.is_not(None))
+                             .group_by(User.linked_chw_id)).all())
+    chws = db.scalars(select(User).where(User.role == "chw")
+                      .order_by(User.created_at.desc())).all()
+    return [ChwOut.model_validate(c).model_copy(update={"caregivers": linked.get(c.user_id, 0)})
+            for c in chws]
+
+
+@router.post("/chws", response_model=ChwOut, status_code=201)
+def invite_chw(body: NewChw, _: User = Depends(admin_only), db: Session = Depends(get_db)):
+    """Adds a CHW by name and email and emails them the link to set up their account."""
+    if db.scalar(select(User).where(User.email == body.email)) is not None:
+        raise HTTPException(409, "an account with this email already exists")
+    user = User(full_name=body.full_name, email=body.email, role="chw",
+                invited_at=datetime.now(timezone.utc))
+    db.add(user)
+    db.commit()
+    send_invite(db, user)
+    return user
+
+
+@router.post("/chws/{user_id}/invite", response_model=ChwOut)
+def resend_invite(user_id: uuid.UUID, _: User = Depends(admin_only),
+                  db: Session = Depends(get_db)):
+    """Sends a new invite; the earlier link stops working."""
+    user = _user(user_id, db)
+    if user.role != "chw":
+        raise HTTPException(404, "CHW not found")
+    if not user.invite_pending:
+        raise HTTPException(409, "this CHW has already set up their account")
+    if not user.is_active:
+        raise HTTPException(409, "reactivate this CHW before sending an invite")
+    send_invite(db, user)
+    return user
 
 
 @router.get("/users", response_model=list[UserOut])
@@ -75,6 +121,8 @@ def link_chw(caregiver_id: uuid.UUID, body: LinkChw, _: User = Depends(admin_onl
         chw = db.get(User, body.chw_id)
         if chw is None or chw.role != "chw" or not chw.is_active:
             raise HTTPException(404, "CHW not found")
+        if chw.invite_pending:
+            raise HTTPException(409, "this CHW has not set up their account yet")
     caregiver.linked_chw_id = body.chw_id
     db.commit()
     return caregiver
@@ -119,7 +167,10 @@ def summary(start: date | None = None, end: date | None = None,
         (PredictionResult.risk_level.in_(("medium", "high")) | PredictionResult.anomaly_flag
          | (func.jsonb_array_length(PredictionResult.red_flags) > 0)),
         PredictionResult.chw_outcome.is_(None)))
-    users = dict(db.execute(select(User.role, func.count()).where(User.is_active)
+    # Accounts people can use: active, and not an invite still waiting to be set up.
+    users = dict(db.execute(select(User.role, func.count())
+                            .where(User.is_active, (User.password_hash.is_not(None)
+                                                    | User.google_id.is_not(None)))
                             .group_by(User.role)).all())
     return {
         "period": {"start": start, "end": end},

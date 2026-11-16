@@ -440,9 +440,12 @@ function addPhonePage(idToken, who) {
   } },
     h('a', { class: 'brand', href: '#' }, svg(MARK), 'Hatua'),
     h('h2', {}, t('One more step')),
-    h('p', { class: 'muted' }, t('Welcome, {name}. Add your phone number to create your Hatua account for {email}.', { name: who.full_name, email: who.email })),
+    who.role === 'chw'
+      // An invited health worker finishing their account with Google
+      ? h('p', { class: 'muted' }, t('Welcome, {name}. Add your phone number to finish setting up your health worker account for {email}.', { name: who.full_name, email: who.email }))
+      : h('p', { class: 'muted' }, t('Welcome, {name}. Add your phone number to create your Hatua account for {email}.', { name: who.full_name, email: who.email })),
     field(t('Your phone number'), phone),
-    h('p', { class: 'muted' }, t('Your community health worker uses it to find you and link to your account.')),
+    who.role === 'chw' ? null : h('p', { class: 'muted' }, t('Your community health worker uses it to find you and link to your account.')),
     button,
     h('p', { style: 'text-align:center' }, h('button', { type: 'button', class: 'link', onclick: () => loginPage() }, t('Back to sign in'))));
   signinScreen(form);
@@ -457,7 +460,7 @@ async function adminOverview() {
   page({ title: t('Overview'), sub: t('How Hatua is being used, in totals. Individual children are only seen by their caregiver and health worker.') },
     h('div', { class: 'tiles' },
       tile('family_restroom', 'bg-sun', s.users.caregiver, t('Caregivers'), { href: '#users' }),
-      tile('medical_services', 'bg-sky', s.users.chw, t('Health workers'), { href: '#users' }),
+      tile('medical_services', 'bg-sky', s.users.chw, t('Health workers'), { href: '#chws' }),
       tile('child_care', 'bg-blush', s.children, t('Children')),
       tile('pending_actions', 'bg-plum', s.awaiting_review, t('Waiting for a health worker'), { warn: true })),
     h('h2', {}, t('Checks')),
@@ -474,6 +477,51 @@ async function adminOverview() {
           h('tr', {}, h('td', {}, t('Answers that do not fit together')), h('td', {}, s.anomaly_flags))]))));
 }
 
+/** Health workers: invite one by name and email, see who has set up their account. */
+async function adminChws() {
+  const chws = await api('/admin/chws');
+  const status = (c) => {
+    if (!c.is_active) return h('span', { class: 'chip flag' }, t('Deactivated'));
+    if (c.invite_pending) return h('span', { class: 'chip medium' }, t('Invited'));
+    return h('span', { class: 'chip low' }, t('Active'));
+  };
+  const rows = chws.map((c) => h('tr', {},
+    h('td', {}, person(initial(c.full_name), c.full_name, c.email || '')),
+    h('td', {}, c.phone_number || h('span', { class: 'muted' }, t('Not added yet'))),
+    h('td', {}, c.caregivers),
+    h('td', {}, status(c), c.invite_pending && c.invited_at
+      ? h('div', { class: 'muted' }, t('Invite sent {date}', { date: fmtDate(c.invited_at) })) : null),
+    h('td', {}, c.invite_pending && c.is_active
+      ? h('button', { class: 'small second', onclick: (ev) => run(ev.target, async () => {
+        await api('/admin/chws/' + c.user_id + '/invite', { method: 'POST' });
+        toast(t('A new invite was sent to {email}.', { email: c.email }));
+        await adminChws();
+      }) }, icon('forward_to_inbox'), t('Resend invite')) : '')));
+
+  const name = h('input', { required: true, autocomplete: 'off' });
+  const email = h('input', { type: 'email', required: true, autocomplete: 'off' });
+  const send = h('button', { type: 'submit' }, icon('send'), t('Send invite'));
+  const form = h('form', { class: 'card', onsubmit: (ev) => {
+    ev.preventDefault();
+    run(send, async () => {
+      await api('/admin/chws', { method: 'POST', body: { full_name: name.value, email: email.value } });
+      toast(t('Invite sent to {email}.', { email: email.value }));
+      await adminChws();
+    });
+  } }, h('h3', {}, t('Add a health worker')),
+    h('div', { class: 'row' }, field(t('Full name'), name), field(t('Email'), email), send),
+    h('p', { class: 'muted' }, t('They get an email with a link to choose a password and add their phone number. They can also sign in with Google using this email.')));
+
+  const waiting = chws.filter((c) => c.invite_pending && c.is_active).length;
+  page({ title: t('Health workers'), sub: t('Community health workers review flagged checks and answer caregivers\' questions.') },
+    form,
+    waiting ? note(t(waiting === 1 ? '1 health worker has not set up their account yet. Caregivers can be linked to them once they have.'
+      : '{n} health workers have not set up their accounts yet. Caregivers can be linked to them once they have.', { n: waiting })) : null,
+    h('div', { class: 'card' }, chws.length
+      ? table([t('Name'), t('Phone'), t('Caregivers'), t('Status'), ''], rows)
+      : empty(t('No health workers yet. Add one above.'), 'medical_services')));
+}
+
 async function adminUsers() {
   const users = await api('/admin/users');
   const chws = new Map(users.filter((u) => u.role === 'chw').map((u) => [u.user_id, u.full_name + (u.email ? ' (' + u.email + ')' : '')]));
@@ -487,7 +535,9 @@ async function adminUsers() {
         h('td', {}, person(initial(u.full_name), u.full_name, u.email || '')),
         h('td', {}, ROLE[u.role]), h('td', {}, u.phone_number),
         h('td', {}, u.role === 'caregiver' ? (chws.get(u.linked_chw_id) || t('No health worker yet')) : ''),
-        h('td', {}, h('span', { class: 'chip ' + (u.is_active ? 'low' : 'flag') }, u.is_active ? t('Active') : t('Deactivated'))),
+        h('td', {}, !u.is_active ? h('span', { class: 'chip flag' }, t('Deactivated'))
+          : u.invite_pending ? h('span', { class: 'chip medium' }, t('Invited'))
+            : h('span', { class: 'chip low' }, t('Active'))),
         h('td', {}, u.user_id === me.user_id ? '' : h('button', { class: 'small second', onclick: (ev) => run(ev.target, async () => {
           await api('/admin/users/' + u.user_id, { method: 'PATCH', body: { is_active: !u.is_active } });
           toast(t(u.is_active ? '{name} was deactivated.' : '{name} was reactivated.', { name: u.full_name }));
@@ -524,7 +574,8 @@ async function adminUsers() {
 
 async function adminLinking() {
   const users = await api('/admin/users');
-  const chws = users.filter((u) => u.role === 'chw' && u.is_active);
+  // A health worker still waiting on their invite cannot take caregivers yet.
+  const chws = users.filter((u) => u.role === 'chw' && u.is_active && !u.invite_pending);
   const caregivers = users.filter((u) => u.role === 'caregiver' && u.is_active)
     .sort((a, b) => (a.linked_chw_id ? 1 : 0) - (b.linked_chw_id ? 1 : 0) || a.full_name.localeCompare(b.full_name));
   const unlinked = caregivers.filter((c) => !c.linked_chw_id).length;
@@ -1051,8 +1102,9 @@ async function cgAsk() {
 // ---------- pages by role, and the router ----------
 
 const PAGES = {
-  admin: [['overview', t('Overview'), 'dashboard', adminOverview], ['users', t('Users'), 'group', adminUsers],
-    ['linking', t('Linking'), 'link', adminLinking], ['reports', t('Reports'), 'description', adminReports]],
+  admin: [['overview', t('Overview'), 'dashboard', adminOverview], ['chws', t('Health workers'), 'medical_services', adminChws],
+    ['users', t('Users'), 'group', adminUsers], ['linking', t('Linking'), 'link', adminLinking],
+    ['reports', t('Reports'), 'description', adminReports]],
   chw: [['home', t('Home'), 'home', chwHome], ['families', t('My families'), 'family_restroom', chwFamilies],
     ['questions', t('Questions'), 'chat_bubble', chwQuestions], ['reviewed', t('Reviewed'), 'fact_check', chwReviewed]],
   caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Ask your health worker'), 'chat_bubble', cgAsk]],

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
     verify_link_hours: int = 48
     reset_link_minutes: int = 60
+    invite_link_days: int = 7  # CHW invites; the administrator can send a new one
 
     @property
     def google_audiences(self) -> list[str]:

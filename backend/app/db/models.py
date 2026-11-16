@@ -51,14 +51,20 @@ class User(Base):
     __table_args__ = (
         CheckConstraint(_in("role", ROLES), name="role_valid"),
         CheckConstraint(_in("language", LANGUAGES), name="language_valid"),
-        # every account has a way to sign in: a Hatua password, a Google account, or both
-        CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL",
-                        name="has_sign_in"),
+        # every account has a way to sign in: a Hatua password, a Google account, or both,
+        # or is a CHW invite still waiting to be set up (see invited_at)
+        CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL "
+                        "OR invited_at IS NOT NULL", name="has_sign_in"),
+        # only an invite still waiting may have no phone number
+        CheckConstraint("phone_number IS NOT NULL OR (invited_at IS NOT NULL AND "
+                        "password_hash IS NULL AND google_id IS NULL)",
+                        name="phone_or_invited"),
     )
 
     user_id: Mapped[uuid.UUID] = _uuid()
     full_name: Mapped[str] = mapped_column(String(100))
-    phone_number: Mapped[str] = mapped_column(String(15), unique=True)
+    # Empty only while a CHW invite is waiting: the CHW adds it when setting up.
+    phone_number: Mapped[str | None] = mapped_column(String(15), unique=True)
     password_hash: Mapped[str | None] = mapped_column(String(255))
     # People sign in with their email (and a password, or Google). The phone number is
     # a contact detail and how CHWs find a caregiver to link. Nullable only for accounts
@@ -79,7 +85,15 @@ class User(Base):
     # App language: English or Swahili. Saved on the account so it follows the person
     # from the phone to the web.
     language: Mapped[str] = mapped_column(String(2), server_default="en", default="en")
+    # CHW invites (POST /admin/chws): when the invite email was last sent. The account
+    # waits, with no password, Google account or phone number, until the CHW opens the
+    # link and sets a password, or signs in with Google using the invited email.
+    invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _now()
+
+    @property
+    def invite_pending(self) -> bool:
+        return self.password_hash is None and self.google_id is None
 
 
 class Child(Base):
