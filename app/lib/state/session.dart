@@ -100,18 +100,23 @@ class Session extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<dynamic> _sendChange(QueuedChange c) => c.method == 'put'
+      ? api.put(c.path, c.body, c.key)
+      : api.post(c.path, c.body, c.key);
+
   /// Sends a change, or keeps it on the phone when there is no connection and throws
   /// [SavedForLater]. Other errors (the server refused it) are thrown as usual.
   Future<dynamic> sendOrQueue(
       {required String kind,
       required String path,
       required Map<String, dynamic> body,
-      required String label}) async {
+      required String label,
+      String method = 'post'}) async {
     final change = QueuedChange(
         key: newChangeKey(), kind: kind, path: path, body: body, label: label,
-        savedAt: DateTime.now());
+        savedAt: DateTime.now(), method: method);
     try {
-      return await api.post(path, body, change.key);
+      return await _sendChange(change);
     } catch (e) {
       if (classifySendError(e) != SendFailure.retryLater) rethrow;
       queued = [...queued, change];
@@ -240,7 +245,7 @@ class Session extends ChangeNotifier with WidgetsBindingObserver {
         continue;
       }
       try {
-        await api.post(c.path, c.body, c.key);
+        await _sendChange(c);
         changesSent++;
       } catch (e) {
         if (classifySendError(e) == SendFailure.rejected) {

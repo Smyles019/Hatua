@@ -7,11 +7,12 @@
                "unreachable", as on the result screen)
                a child reached a new age band with no check yet (daily job:
                python -m app.cli send-reminders)
+               a clinic visit is tomorrow (the date copied from the booklet; same job)
 
 The text names no risk level and quotes no message, so a lock screen shows nothing
 private. Each person gets it in their own language (users.language).
 """
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import BackgroundTasks
 from sqlalchemy import select
@@ -105,5 +106,27 @@ def send_check_reminders(session_factory, today: date | None = None) -> int:
             # Either way this band is done: checked already, reminded now, or the caregiver
             # has no phone to remind (they will see the due check in the app).
             child.reminded_band = band
+        db.commit()
+    return sent
+
+
+def send_clinic_reminders(session_factory, today: date | None = None) -> int:
+    """'Clinic visit tomorrow' the day before the next visit the caregiver copied from the
+    booklet (Child.next_clinic_on), once per visit date. Run daily."""
+    today = today or date.today()
+    tomorrow = today + timedelta(days=1)
+    sent = 0
+    with session_factory() as db:
+        rows = db.execute(select(Child, User).join(User, Child.caregiver_id == User.user_id)
+                          .where(User.is_active, Child.next_clinic_on == tomorrow)).all()
+        for child, caregiver in rows:
+            if child.clinic_reminded_on == child.next_clinic_on:
+                continue
+            if caregiver.push_tokens:
+                _to(None, caregiver, "Clinic visit tomorrow",
+                    "{child} has a clinic visit tomorrow. Take the clinic booklet with you.",
+                    {"type": "child", "id": child.child_id}, child=child.first_name)
+                sent += 1
+            child.clinic_reminded_on = child.next_clinic_on
         db.commit()
     return sent

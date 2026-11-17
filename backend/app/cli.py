@@ -74,8 +74,9 @@ def main(argv=None) -> int:
 
     if args.command == "send-reminders":
         from app.core.idempotency import prune
-        from app.services.notify import send_check_reminders
+        from app.services.notify import send_check_reminders, send_clinic_reminders
         print(f"{send_check_reminders(SessionLocal)} reminder(s) sent")
+        print(f"{send_clinic_reminders(SessionLocal)} clinic reminder(s) sent")
         # The same daily run clears the offline-queue keys older than 30 days.
         print(f"{prune(SessionLocal)} old offline key(s) removed")
         return 0

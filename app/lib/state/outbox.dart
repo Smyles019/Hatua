@@ -18,9 +18,13 @@ class QueuedChange {
     required this.body,
     required this.label,
     required this.savedAt,
+    this.method = 'post',
   });
 
   final String key;
+
+  /// 'post' or 'put' (ticking a vaccine as given).
+  final String method;
 
   /// 'message', 'growth' or 'outcome': used to show it in the right place meanwhile.
   final String kind;
@@ -38,6 +42,7 @@ class QueuedChange {
         'body': body,
         'label': label,
         'saved_at': savedAt.toIso8601String(),
+        'method': method,
       };
 
   factory QueuedChange.fromJson(Map<String, dynamic> j) => QueuedChange(
@@ -47,6 +52,7 @@ class QueuedChange {
         body: Map<String, dynamic>.from(j['body'] as Map),
         label: j['label'] as String,
         savedAt: DateTime.parse(j['saved_at'] as String),
+        method: j['method'] as String? ?? 'post',
       );
 }
 

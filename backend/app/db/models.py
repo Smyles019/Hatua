@@ -128,6 +128,24 @@ class Child(Base):
     # The age band ("12-17") the "time for a check" reminder was last sent for, so each
     # band is reminded once (app.services.notify.send_check_reminders).
     reminded_band: Mapped[str | None] = mapped_column(String(10))
+    # The child health record from the purple book (app.services.immunization).
+    # Vaccines, vitamin A and deworming given, by schedule id: {"bcg": "2026-01-03"}.
+    care_given: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"),
+                                             default=dict)
+    # County-only vaccines switched on for this child: "malaria", "yellow_fever".
+    extra_vaccines: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
+                                                 default=list)
+    # {"weight_kg", "gestation_weeks", "place"}, any of them may be missing.
+    birth: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), default=dict)
+    birth_certificate: Mapped[bool | None] = mapped_column(Boolean)
+    bed_net: Mapped[bool | None] = mapped_column(Boolean)
+    # The next visit the nurse wrote in the booklet, and the visit the "clinic tomorrow"
+    # reminder was last sent for (so it goes once).
+    next_clinic_on: Mapped[date | None] = mapped_column(Date)
+    clinic_reminded_on: Mapped[date | None] = mapped_column(Date)
+    # The caregiver's notes of sick visits: [{"visit_id", "visit_on", "illness", "treatment"}].
+    sick_visits: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
+                                              default=list)
     created_at: Mapped[datetime] = _now()
 
 

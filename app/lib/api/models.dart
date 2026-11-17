@@ -56,21 +56,118 @@ class AppUser {
 
 /// One weight and height entry (backend: children.growth).
 class GrowthEntry {
-  GrowthEntry({required this.measuredOn, this.weightKg, this.heightCm});
+  GrowthEntry({required this.measuredOn, this.weightKg, this.heightCm, this.muacCm});
   final DateTime measuredOn;
   final double? weightKg;
   final double? heightCm;
+
+  /// Mid-upper arm circumference (the coloured arm tape), from 6 months.
+  final double? muacCm;
 
   Map<String, dynamic> toJson() => {
         'measured_on': measuredOn.toIso8601String().substring(0, 10),
         'weight_kg': weightKg,
         'height_cm': heightCm,
+        if (muacCm != null) 'muac_cm': muacCm,
       };
 
   factory GrowthEntry.fromJson(Map<String, dynamic> j) => GrowthEntry(
         measuredOn: DateTime.parse(j['measured_on'] as String),
         weightKg: (j['weight_kg'] as num?)?.toDouble(),
         heightCm: (j['height_cm'] as num?)?.toDouble(),
+        muacCm: (j['muac_cm'] as num?)?.toDouble(),
+      );
+}
+
+/// The birth page of the clinic booklet. Any field may be missing.
+class BirthDetails {
+  BirthDetails({this.weightKg, this.gestationWeeks, this.place});
+  final double? weightKg;
+  final int? gestationWeeks;
+  final String? place; // facility | home | on_the_way
+
+  bool get isEmpty => weightKg == null && gestationWeeks == null && place == null;
+
+  Map<String, dynamic> toJson() => {
+        if (weightKg != null) 'weight_kg': weightKg,
+        if (gestationWeeks != null) 'gestation_weeks': gestationWeeks,
+        if (place != null) 'place': place,
+      };
+
+  factory BirthDetails.fromJson(Map<String, dynamic>? j) => BirthDetails(
+        weightKg: (j?['weight_kg'] as num?)?.toDouble(),
+        gestationWeeks: j?['gestation_weeks'] as int?,
+        place: j?['place'] as String?,
+      );
+}
+
+/// A sick visit the caregiver noted down.
+class SickVisit {
+  SickVisit(this.visitId, this.visitOn, this.illness, this.treatment);
+  final String visitId;
+  final DateTime visitOn;
+  final String illness;
+  final String? treatment;
+
+  factory SickVisit.fromJson(Map<String, dynamic> j) => SickVisit(j['visit_id'] as String,
+      DateTime.parse(j['visit_on'] as String), j['illness'] as String, j['treatment'] as String?);
+}
+
+/// One vaccine, vitamin A or deworming dose on the child's schedule (backend
+/// app/services/immunization.py). status: given, due, overdue, upcoming, not_recorded.
+class Dose {
+  Dose({
+    required this.item,
+    required this.kind,
+    required this.name,
+    required this.visit,
+    required this.dueOn,
+    required this.status,
+    this.givenOn,
+    this.optional,
+  });
+  final String item;
+  final String kind; // vaccine | vitamin_a | deworming
+  final String name;
+  final String visit; // "At 6 weeks", in the reader's language
+  final DateTime dueOn;
+  final DateTime? givenOn;
+  final String status;
+
+  /// "malaria" or "yellow_fever" for the county-only vaccines.
+  final String? optional;
+
+  bool get given => status == 'given';
+
+  factory Dose.fromJson(Map<String, dynamic> j) => Dose(
+        item: j['item'] as String,
+        kind: j['kind'] as String,
+        name: j['name'] as String,
+        visit: j['visit'] as String,
+        dueOn: DateTime.parse(j['due_on'] as String),
+        givenOn: j['given_on'] == null ? null : DateTime.parse(j['given_on'] as String),
+        status: j['status'] as String,
+        optional: j['optional'] as String?,
+      );
+}
+
+/// The child's vaccines, vitamin A and deworming, with counts for the graphs.
+class HealthRecord {
+  HealthRecord(this.doses, this.counts, this.extraVaccines);
+  final List<Dose> doses;
+
+  /// kind -> status -> number, plus "total".
+  final Map<String, Map<String, int>> counts;
+  final List<String> extraVaccines;
+
+  List<Dose> of(String kind) => doses.where((d) => d.kind == kind).toList();
+  int count(String kind, String status) => counts[kind]?[status] ?? 0;
+
+  factory HealthRecord.fromJson(Map<String, dynamic> j) => HealthRecord(
+        (j['doses'] as List).map((d) => Dose.fromJson(d as Map<String, dynamic>)).toList(),
+        (j['counts'] as Map).map((k, v) => MapEntry(
+            '$k', (v as Map).map((s, n) => MapEntry('$s', (n as num).toInt())))),
+        ((j['extra_vaccines'] as List?) ?? []).map((e) => '$e').toList(),
       );
 }
 
@@ -86,7 +183,21 @@ class Child {
     this.avatarId,
     this.growth = const [],
     this.careFactors = const [],
-  });
+    BirthDetails? birth,
+    this.birthCertificate,
+    this.bedNet,
+    this.nextClinicOn,
+    this.extraVaccines = const [],
+    this.sickVisits = const [],
+  }) : birth = birth ?? BirthDetails();
+
+  // From the purple book (Mother and Child Health Handbook).
+  final BirthDetails birth;
+  final bool? birthCertificate; // null: not answered yet
+  final bool? bedNet;
+  final DateTime? nextClinicOn;
+  final List<String> extraVaccines; // malaria, yellow_fever
+  final List<SickVisit> sickVisits; // newest first
 
   /// Ticked reasons for special care (low_birth_weight, multiple_birth,
   /// short_birth_spacing). Shown to the CHW; not used by the model.
@@ -119,6 +230,15 @@ class Child {
             .map((g) => GrowthEntry.fromJson(g as Map<String, dynamic>))
             .toList(),
         careFactors: ((j['care_factors'] as List?) ?? []).map((f) => '$f').toList(),
+        birth: BirthDetails.fromJson(j['birth'] as Map<String, dynamic>?),
+        birthCertificate: j['birth_certificate'] as bool?,
+        bedNet: j['bed_net'] as bool?,
+        nextClinicOn:
+            j['next_clinic_on'] == null ? null : DateTime.parse(j['next_clinic_on'] as String),
+        extraVaccines: ((j['extra_vaccines'] as List?) ?? []).map((e) => '$e').toList(),
+        sickVisits: ((j['sick_visits'] as List?) ?? [])
+            .map((v) => SickVisit.fromJson(v as Map<String, dynamic>))
+            .toList(),
       );
 }
 

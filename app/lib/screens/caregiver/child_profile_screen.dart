@@ -12,8 +12,10 @@ import '../../widgets/common.dart';
 import '../../widgets/domain.dart';
 import '../../widgets/growth_chart.dart';
 import '../../widgets/journey_path.dart';
+import '../../widgets/record_charts.dart';
 import '../../widgets/risk_chip.dart';
 import 'caregiver_data.dart';
+import 'child_record_sections.dart';
 import 'caregiver_shell.dart';
 import 'result_screen.dart';
 import '../../i18n/strings.dart';
@@ -155,8 +157,20 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
               ),
         ]),
       ),
+      // The purple book: vaccines and supplements, the next clinic visit, birth and home,
+      // and feeding for this age.
+      SizedBox(height: Space.s3),
+      BookletCard(child: c, canEdit: isCaregiver),
+      SizedBox(height: Space.s3),
+      NextClinicCard(child: c, canEdit: isCaregiver),
+      SizedBox(height: Space.s3),
+      BirthHomeCard(child: c, canEdit: isCaregiver),
+      SizedBox(height: Space.s3),
+      FeedingCard(child: c),
       SizedBox(height: Space.s6),
       _GrowthSection(child: c, canAdd: isCaregiver),
+      SizedBox(height: Space.s6),
+      SickVisitsSection(child: c, canEdit: isCaregiver),
       SizedBox(height: Space.s6),
       Text(tr("{firstName}'s journey", {'firstName': c.firstName}), style: t.titleLarge),
       Text(tr('One step for each age, from birth to five.'), style: t.bodySmall),
@@ -295,19 +309,33 @@ class _GrowthSection extends StatelessWidget {
               child: _Measure(
                   icon: Icons.monitor_weight_outlined,
                   label: tr('Weight'),
-                  value: n(entries.first.weightKg, 'kg'),
+                  value: n(entries.where((e) => e.weightKg != null).firstOrNull?.weightKg, 'kg'),
                   color: context.hc.sun100)),
           SizedBox(width: Space.s3),
           Expanded(
               child: _Measure(
                   icon: Icons.straighten_rounded,
                   label: tr('Height'),
-                  value: n(entries.first.heightCm, 'cm'),
+                  value: n(entries.where((e) => e.heightCm != null).firstOrNull?.heightCm, 'cm'),
                   color: context.hc.sky100)),
         ]),
-        if (entries.any((e) => e.weightKg != null)) ...[
+        if (entries.any((e) => e.weightKg != null || e.heightCm != null)) ...[
           SizedBox(height: Space.s3),
-          HatuaCard(child: WeightChart(child: child)),
+          HatuaCard(child: _GrowthCharts(child: child)),
+        ],
+        // The arm tape, from 6 months: the latest arm measurement.
+        if (child.ageMonths >= 6 && entries.any((e) => e.muacCm != null)) ...[
+          SizedBox(height: Space.s3),
+          HatuaCard(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(tr('Arm measurement (MUAC)'), style: t.titleMedium),
+              Text(tr('Measured {date}', {
+                'date': df.format(entries.firstWhere((e) => e.muacCm != null).measuredOn)
+              }), style: t.bodySmall),
+              SizedBox(height: Space.s2),
+              MuacTape(muacCm: entries.firstWhere((e) => e.muacCm != null).muacCm!),
+            ]),
+          ),
         ],
         SizedBox(height: Space.s3),
         HatuaCard(
@@ -317,7 +345,12 @@ class _GrowthSection extends StatelessWidget {
               ListTile(
                 dense: true,
                 title: Text(df.format(e.measuredOn), style: t.bodyMedium),
-                trailing: Text('${n(e.weightKg, 'kg')}  ·  ${n(e.heightCm, 'cm')}',
+                trailing: Text(
+                    [
+                      n(e.weightKg, 'kg'),
+                      n(e.heightCm, 'cm'),
+                      if (e.muacCm != null) '${tr('arm')} ${n(e.muacCm, 'cm')}',
+                    ].join('  ·  '),
                     style: t.bodySmall),
               ),
           ]),
@@ -364,12 +397,17 @@ class _GrowthDialogState extends State<_GrowthDialog> {
   final _form = GlobalKey<FormState>();
   final _weight = TextEditingController();
   final _height = TextEditingController();
+  final _muac = TextEditingController();
   bool _busy = false;
+
+  /// The arm tape is used from 6 months.
+  bool get _withArm => widget.child.ageMonths >= 6;
 
   @override
   void dispose() {
     _weight.dispose();
     _height.dispose();
+    _muac.dispose();
     super.dispose();
   }
 
@@ -383,15 +421,15 @@ class _GrowthDialogState extends State<_GrowthDialog> {
 
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
-    final w = _num(_weight.text), h = _num(_height.text);
-    if (w == null && h == null) {
-      showMessage(context, tr('Enter a weight, a height or both.'));
+    final w = _num(_weight.text), h = _num(_height.text), m = _withArm ? _num(_muac.text) : null;
+    if (w == null && h == null && m == null) {
+      showMessage(context, tr('Enter at least one measurement.'));
       return;
     }
     setState(() => _busy = true);
     final session = context.read<Session>();
     try {
-      final entry = GrowthEntry(measuredOn: DateTime.now(), weightKg: w, heightCm: h);
+      final entry = GrowthEntry(measuredOn: DateTime.now(), weightKg: w, heightCm: h, muacCm: m);
       await session.sendOrQueue(
           kind: 'growth',
           path: '/children/${widget.child.childId}/growth',
@@ -417,7 +455,7 @@ class _GrowthDialogState extends State<_GrowthDialog> {
       title: Text(tr('Add weight and height')),
       content: Form(
         key: _form,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+        child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           LabeledField(
             label: tr('Weight (kg)'),
             controller: _weight,
@@ -429,15 +467,101 @@ class _GrowthDialogState extends State<_GrowthDialog> {
             label: tr('Height or length (cm)'),
             controller: _height,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            textInputAction: TextInputAction.done,
+            textInputAction: _withArm ? TextInputAction.next : TextInputAction.done,
             validator: (v) => _range(v, 40, 130),
           ),
-        ]),
+          if (_withArm) ...[
+            SizedBox(height: Space.s3),
+            LabeledField(
+              label: tr('Arm (MUAC, cm)'),
+              hint: tr('From the coloured arm tape'),
+              controller: _muac,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textInputAction: TextInputAction.done,
+              validator: (v) => _range(v, 8, 25),
+            ),
+          ],
+        ])),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel'))),
         TextButton(onPressed: _busy ? null : _save, child: Text(tr('Save'))),
       ],
     );
+  }
+}
+
+/// Weight-for-age and length/height-for-age with the booklet's WHO zones. The zones come
+/// from the server (and are kept on the phone like other pages); with neither, the
+/// simpler built-in weight chart is shown.
+class _GrowthCharts extends StatefulWidget {
+  const _GrowthCharts({required this.child});
+  final Child child;
+
+  @override
+  State<_GrowthCharts> createState() => _GrowthChartsState();
+}
+
+class _GrowthChartsState extends State<_GrowthCharts> {
+  late final Future<Map<String, dynamic>> _ref = context
+      .read<Session>()
+      .api
+      .get('/children/${widget.child.childId}/growth-reference')
+      .then((d) => d as Map<String, dynamic>);
+  String _measure = 'weight';
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final c = widget.child;
+    final weight = _measure == 'weight';
+    final points = [
+      for (final g in c.growth)
+        if ((weight ? g.weightKg : g.heightCm) != null)
+          Offset(ageInMonthsOn(c.dateOfBirth, g.measuredOn).clamp(0, 60).toDouble(),
+              weight ? g.weightKg! : g.heightCm!),
+    ];
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SegmentedButton<String>(
+        segments: [
+          ButtonSegment(value: 'weight', label: Text(tr('Weight for age'))),
+          ButtonSegment(value: 'height', label: Text(tr('Height for age'))),
+        ],
+        selected: {_measure},
+        onSelectionChanged: (s) => setState(() => _measure = s.first),
+      ),
+      const SizedBox(height: Space.s3),
+      FutureBuilder<Map<String, dynamic>>(
+        future: _ref,
+        builder: (context, snap) {
+          if (snap.hasError) return weight ? WeightChart(child: c) : const SizedBox.shrink();
+          if (!snap.hasData) {
+            return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()));
+          }
+          final ref = GrowthReference.fromJson(
+              snap.data![weight ? 'weight_for_age' : 'height_for_age'] as List);
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (points.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Space.s2),
+                child: Text(
+                    weight ? tr('No weight entered yet.') : tr('No height entered yet.'),
+                    style: t.bodySmall),
+              ),
+            GrowthZonesChart(
+              reference: ref,
+              points: points,
+              unit: weight ? 'kg' : 'cm',
+              maxValue: weight ? 30 : 130,
+            ),
+            const SizedBox(height: Space.s1),
+            Text(
+                tr("Dots: {firstName}'s measurements. Line: the middle for this age (WHO standard).",
+                    {'firstName': c.firstName}),
+                style: t.bodySmall),
+          ]);
+        },
+      ),
+    ]);
   }
 }

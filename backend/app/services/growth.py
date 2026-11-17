@@ -29,7 +29,12 @@ PLAUSIBLE = {"weight_for_age": (-6.0, 5.0), "height_for_age": (-6.0, 6.0)}
 GROWTH_FLAGS = {
     "growth_underweight": "Weight is low for age (below -2 SD, WHO standard)",
     "growth_stunted": "Height is low for age (below -2 SD, WHO standard)",
+    "growth_muac_severe": "Arm measurement (MUAC) below 11.5 cm: severe acute malnutrition",
+    "growth_muac_moderate": "Arm measurement (MUAC) 11.5 to 12.4 cm: moderate acute malnutrition",
 }
+# MUAC, the coloured arm tape in the handbook, for children 6 to 59 months (WHO cut-offs):
+# red below 11.5 cm, yellow 11.5 to 12.4 cm, green from 12.5 cm.
+MUAC_SEVERE, MUAC_MODERATE = 11.5, 12.5
 
 
 @lru_cache(maxsize=1)
@@ -98,4 +103,37 @@ def growth_flags(dob: date, sex: str, growth: list[dict], on: date) -> list[str]
         flags.append("growth_underweight")
     if "height_for_age" in z and z["height_for_age"]["z"] < CUTOFF:
         flags.append("growth_stunted")
+    muac = latest_muac(dob, growth, on)
+    if muac is not None:
+        if muac < MUAC_SEVERE:
+            flags.append("growth_muac_severe")
+        elif muac < MUAC_MODERATE:
+            flags.append("growth_muac_moderate")
     return flags
+
+
+def latest_muac(dob: date, growth: list[dict], on: date) -> float | None:
+    """The most recent arm measurement within RECENT_DAYS, taken at 6 months or older."""
+    entries = [g for g in growth or [] if g.get("muac_cm")
+               and 0 <= (on - date.fromisoformat(str(g["measured_on"]))).days <= RECENT_DAYS
+               and age_in_months_on(dob, date.fromisoformat(str(g["measured_on"]))) >= 6]
+    if not entries:
+        return None
+    return float(max(entries, key=lambda e: str(e["measured_on"]))["muac_cm"])
+
+
+def reference_curves(sex: str) -> dict:
+    """The WHO lines the booklet's growth charts draw, month by month from birth to 60
+    months, for the app's charts: -3, -2, median and +2 SD for weight-for-age (kg) and
+    length/height-for-age (cm; length under 24 months, height from 24)."""
+    out = {}
+    for indicator in ("weight_for_age", "height_for_age"):
+        rows = []
+        for month in range(0, 61):
+            table = "length_for_age" if indicator == "height_for_age" and month < 24 else indicator
+            L, M, S = _lms(table, sex, month)
+            rows.append({"month": month,
+                         **{k: round(_value_at(L, M, S, z), 2)
+                            for k, z in (("sd_m3", -3), ("sd_m2", -2), ("median", 0), ("sd_p2", 2))}})
+        out[indicator] = rows
+    return out

@@ -10,15 +10,17 @@ import 'case_review_screen.dart';
 import 'chw_data.dart';
 import 'flagged_screen.dart';
 import 'link_caregiver_screen.dart';
+import 'missed_doses_screen.dart';
 import 'questions_screen.dart';
 import '../../i18n/strings.dart';
 
 class _HomeData {
-  _HomeData(this.open, this.all, this.caregivers, this.threads);
+  _HomeData(this.open, this.all, this.caregivers, this.threads, this.missed);
   final List<Assessment> open;
   final List<Assessment> all;
   final List<LinkedCaregiver> caregivers;
   final List<ThreadSummary> threads;
+  final List<MissedChild> missed;
 
   int get questionsWaiting => threads.where((t) => t.waitingForChw).length;
 
@@ -48,9 +50,11 @@ class _ChwHomeTabState extends State<ChwHomeTab> {
         loadCases(s.api, includeReviewed: true),
         loadCaregivers(s.api),
         loadThreads(s.api),
+        // An older server without the missed-dose list: show nothing rather than fail.
+        loadMissed(s).catchError((_) => <MissedChild>[]),
       ]);
       return _HomeData(r[0] as List<Assessment>, r[1] as List<Assessment>,
-          r[2] as List<LinkedCaregiver>, r[3] as List<ThreadSummary>);
+          r[2] as List<LinkedCaregiver>, r[3] as List<ThreadSummary>, r[4] as List<MissedChild>);
     }();
   }
 
@@ -107,6 +111,34 @@ class _ChwHomeTabState extends State<ChwHomeTab> {
                 ]),
                 SizedBox(height: Space.s3),
                 _QuestionsCard(waiting: d.questionsWaiting),
+                SizedBox(height: Space.s3),
+                // Defaulter tracing: children with vaccines more than 4 weeks late.
+                InkWell(
+                  borderRadius: BorderRadius.circular(Radii.lg),
+                  onTap: () => Navigator.of(context)
+                      .push(MaterialPageRoute(builder: (_) => const MissedDosesScreen())),
+                  child: HatuaCard(
+                    color: d.missed.isEmpty ? null : context.hc.riskMediumBg,
+                    child: Row(children: [
+                      Icon(Icons.vaccines_outlined, color: context.hc.plum900),
+                      SizedBox(width: Space.s3),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(tr('Missed vaccines'), style: t.titleMedium),
+                          Text(
+                              d.missed.isEmpty
+                                  ? tr('No child is late for a vaccine.')
+                                  : d.missed.length == 1
+                                      ? tr('1 child is more than 4 weeks late for a vaccine.')
+                                      : tr('{n} children are more than 4 weeks late for a vaccine.',
+                                          {'n': d.missed.length}),
+                              style: t.bodySmall),
+                        ]),
+                      ),
+                      Icon(Icons.chevron_right_rounded),
+                    ]),
+                  ),
+                ),
                 SizedBox(height: Space.s6),
                 Text(tr('Most recent flags'), style: t.titleLarge),
                 SizedBox(height: Space.s3),

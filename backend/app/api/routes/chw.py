@@ -20,8 +20,9 @@ from app.db.models import CaregiverInput, Child, PredictionResult, User
 from app.db.session import get_db
 from app.schemas.assessment import OutcomeIn
 from app.schemas.users import EnrolCaregiver, LinkByPhone, UserOut
-from app.services import notify, report, report_pdf
-from app.services.results import needs_chw, to_out
+from app.services import immunization, notify, report, report_pdf
+from app.services.i18n import tr
+from app.services.results import age_in_months, needs_chw, to_out
 
 router = APIRouter()
 chw_only = require("chw")
@@ -129,6 +130,33 @@ def record_outcome(prediction_id: uuid.UUID, body: OutcomeIn, bg: BackgroundTask
     if changed:  # saving the same outcome again tells the caregiver nothing new
         notify.outcome_recorded(bg, caregiver, child, pred)
     return to_out(pred, inp, child, user.language)
+
+
+# ---- Missed vaccines (defaulter tracing) ----
+
+@router.get("/missed-doses")
+def missed_doses(user: User = Depends(chw_only), db: Session = Depends(get_db)):
+    """Children of this CHW's families with a vaccine more than 4 weeks overdue, the
+    longest overdue first. Only doses that fell due after the child was added to Hatua
+    count (app.services.immunization): older ones may just not have been copied from the
+    booklet."""
+    rows = db.execute(select(Child, User).join(User, Child.caregiver_id == User.user_id)
+                      .where(User.linked_chw_id == user.user_id, User.is_active)).all()
+    out = []
+    for child, caregiver in rows:
+        if age_in_months(child.date_of_birth) >= 60:
+            continue
+        doses = immunization.missed(child)
+        if doses:
+            out.append({"child_id": child.child_id, "child_name": child.first_name,
+                        "child_avatar_id": child.avatar_id,
+                        "age_months": age_in_months(child.date_of_birth),
+                        "caregiver": {"user_id": caregiver.user_id,
+                                      "full_name": caregiver.full_name,
+                                      "phone_number": caregiver.phone_number},
+                        "doses": [{**d, "name": tr(d["name"], user.language)} for d in doses],
+                        "most_days_overdue": max(d["days_overdue"] for d in doses)})
+    return sorted(out, key=lambda c: -c["most_days_overdue"])
 
 
 # ---- Full check report (every question and answer), for the CHW only ----

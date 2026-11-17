@@ -15,6 +15,7 @@ from app.api.deps import require
 from app.api.routes.auth import add_user, send_invite
 from app.db.models import CHW_OUTCOMES, RISK_LEVELS, ROLES, CaregiverInput, Child, PredictionResult, User
 from app.db.session import get_db
+from app.services import immunization
 from app.schemas.users import (ChwOut, LinkChw, NewChw, NewUser, UsageSummary, UserOut,
                                UserUpdate)
 
@@ -185,5 +186,28 @@ def summary(start: date | None = None, end: date | None = None,
                                .where(func.jsonb_array_length(results.c.red_flags) > 0)),
         "outcomes": {o: outcomes.get(o, 0) for o in CHW_OUTCOMES},
         "awaiting_review": awaiting,
+        "immunization": _immunization(db),
         "generated_at": datetime.now(timezone.utc),
     }
+
+
+def _immunization(db: Session) -> dict:
+    """Children under five today, by the state of their vaccine record: every dose due so
+    far ticked; some dose overdue (app.services.immunization); not started (nothing
+    ticked); the rest are partly copied from the booklet. Counts only, no children."""
+    out = {"children": 0, "up_to_date": 0, "overdue": 0, "not_started": 0, "partly_recorded": 0}
+    for child in db.scalars(select(Child)):
+        r = immunization.record(child)
+        v = r["counts"]["vaccine"]
+        if not r["doses"] or v["total"] == v["upcoming"] and not v["given"]:
+            continue  # too young for any dose, or five already
+        out["children"] += 1
+        if v["overdue"]:
+            out["overdue"] += 1
+        elif not v["given"]:
+            out["not_started"] += 1
+        elif v["not_recorded"] or v["due"]:
+            out["partly_recorded"] += 1
+        else:
+            out["up_to_date"] += 1
+    return out

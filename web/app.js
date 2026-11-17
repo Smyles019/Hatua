@@ -474,7 +474,21 @@ async function adminOverview() {
       h('div', { class: 'card' }, h('h3', {}, t('Flags')),
         table([t('Flag'), t('Count')], [
           h('tr', {}, h('td', {}, t('Hearing, eyes or growth need a look')), h('td', {}, s.red_flags || 0)),
-          h('tr', {}, h('td', {}, t('Answers that do not fit together')), h('td', {}, s.anomaly_flags))]))));
+          h('tr', {}, h('td', {}, t('Answers that do not fit together')), h('td', {}, s.anomaly_flags))]))),
+    vaccineCoverage(s.immunization));
+}
+
+/** Admin: children under five by the state of their vaccine record, as one stacked bar
+ *  with a key. Each part also carries its number and a pattern, so it reads in print. */
+function vaccineCoverage(im) {
+  if (!im || !im.children) return null;
+  const parts = [['up_to_date', t('Up to date'), 'seg-ok'], ['partly_recorded', t('Partly copied from the booklet'), 'seg-part'],
+    ['not_started', t('Nothing ticked yet'), 'seg-none'], ['overdue', t('A vaccine overdue'), 'seg-late']];
+  return h('div', { class: 'card' }, h('h3', {}, t('Vaccine records')),
+    h('p', { class: 'muted' }, t('{n} children with at least one vaccine due so far.', { n: im.children })),
+    h('div', { class: 'stack', role: 'img', 'aria-label': parts.map(([k, label]) => label + ': ' + im[k]).join(', ') },
+      parts.filter(([k]) => im[k]).map(([k, , cls]) => h('div', { class: cls, style: 'flex:' + im[k] }, String(im[k])))),
+    h('ul', { class: 'key' }, parts.map(([k, label, cls]) => h('li', {}, h('i', { class: cls }), label + ': ' + im[k]))));
 }
 
 /** Health workers: invite one by name and email, see who has set up their account. */
@@ -816,6 +830,28 @@ async function chwReport(id) {
     r.screening.length ? h('div', { class: 'card' }, h('h3', {}, t('Hearing and eyes')), answers(r.screening)) : null);
 }
 
+/** CHW: children of their families with vaccines more than 4 weeks late (defaulter
+ *  tracing), with a bar for each vaccine. */
+async function chwMissed() {
+  const list = await api('/chw/missed-doses');
+  const counts = {};
+  list.forEach((c) => c.doses.forEach((d) => { counts[d.name] = (counts[d.name] || 0) + 1; }));
+  const bars = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const most = bars.length ? bars[0][1] : 1;
+  page({ title: t('Missed vaccines'),
+    sub: t('Doses more than 4 weeks late, due since the child joined Hatua. Check the booklet with the caregiver: the dose may have been given but not ticked.') },
+    ...(list.length ? [
+      h('div', { class: 'card' }, h('h3', {}, t('Children missing each vaccine')),
+        bars.map(([name, n]) => h('div', { class: 'hbar' }, h('span', {}, name),
+          h('div', {}, h('i', { style: 'width:' + Math.round(85 * n / most) + '%' }), h('b', {}, String(n)))))),
+      h('div', { class: 'card' }, table([t('Child'), t('Late doses'), t('Caregiver'), ''], list.map((c) => h('tr', {},
+        h('td', {}, c.child_name + ', ' + ageLabel(c.age_months)),
+        h('td', {}, c.doses.map((d) => h('div', {}, d.name + ' · ' + t('{n} weeks late', { n: Math.floor(d.days_overdue / 7) })))),
+        h('td', {}, c.caregiver.full_name, h('div', { class: 'muted small' }, c.caregiver.phone_number || '')),
+        h('td', {}, h('a', { href: '#thread/' + c.caregiver.user_id }, t('Message')))))))]
+      : [h('div', { class: 'card' }, empty(t('No missed vaccines'), 'verified'))]));
+}
+
 async function chwFamilies() {
   const families = await api('/chw/caregivers');
   const phone = h('input', { placeholder: '0712 345 678', required: true });
@@ -1062,7 +1098,52 @@ async function cgChild(id) {
       h('div', {}, checks.length
         ? checks.map((a, i) => [h('h2', { style: i === 0 ? 'margin-top:0' : null }, i === 0 ? t('Latest check') : t('Check from {date}', { date: fmtDate(a.submitted_at) })), cgResult(a, false)])
         : h('div', { class: 'card' }, empty(t('Start the first check to see how {name} is growing.', { name: child.first_name }), 'child_care'))),
-      h('div', {}, careCard(child), growthCard(child, () => cgChild(id)))));
+      h('div', {}, await bookletCard(child, () => cgChild(id), true), careCard(child), growthCard(child, () => cgChild(id)))));
+}
+
+/** The purple book's vaccine and vitamin A pages: a progress bar and the doses by visit,
+ *  each with the date given or a date box to tick it (backend GET /children/{id}/record). */
+async function bookletCard(child, reload, canEdit) {
+  const rec = await api('/children/' + child.child_id + '/record');
+  const MARK = { given: '●', due: '◐', overdue: '⊗', upcoming: '○', not_recorded: '◌' };
+  const STATUS = { given: t('Given'), due: t('Due now'), overdue: t('Overdue'), upcoming: t('Coming up'),
+    not_recorded: t('Not copied from the booklet') };
+  const v = rec.counts.vaccine;
+  const pct = v.total ? Math.round(100 * v.given / v.total) : 0;
+  const row = (d) => {
+    let action = null;
+    if (canEdit && d.status === 'given') {
+      action = h('button', { class: 'link', onclick: () => run(null, async () => {
+        await api('/children/' + child.child_id + '/record/' + d.item, { method: 'DELETE' }); reload();
+      }) }, t('Untick'));
+    } else if (canEdit && d.status !== 'upcoming') {
+      const day = h('input', { type: 'date', max: new Date().toISOString().slice(0, 10), min: child.date_of_birth,
+        'aria-label': t('Date given') });
+      const save = h('button', { class: 'small' }, t('Given'));
+      save.addEventListener('click', () => run(save, async () => {
+        if (!day.value) throw new Error(t('Choose the date it was given.'));
+        await api('/children/' + child.child_id + '/record/' + d.item, { method: 'PUT', body: { given_on: day.value } });
+        reload();
+      }));
+      action = h('span', { class: 'tick' }, day, save);
+    }
+    return h('tr', { class: d.status === 'overdue' ? 'flagged' : '' },
+      h('td', { 'aria-hidden': 'true', class: 'mark' }, MARK[d.status]),
+      h('td', {}, d.name, h('div', { class: 'muted small' }, d.visit)),
+      h('td', {}, d.status === 'given' ? fmtDate(d.given_on) : STATUS[d.status] + (d.status === 'upcoming' ? ', ' + fmtDate(d.due_on) : '')),
+      h('td', {}, action));
+  };
+  const kinds = [['vaccine', t('Vaccines')], ['vitamin_a', t('Vitamin A')], ['deworming', t('Deworming')]];
+  return h('div', { class: 'card' },
+    h('h3', {}, t('Health booklet')),
+    h('div', { class: 'progress', role: 'img', 'aria-label': t('{done} of {total} vaccines given', { done: v.given, total: v.total }) },
+      h('div', { style: 'width:' + pct + '%' })),
+    h('p', {}, t('{done} of {total} vaccines given', { done: v.given, total: v.total }),
+      v.overdue ? ' · ' + t('{n} overdue', { n: v.overdue }) : '', v.due ? ' · ' + t('{n} due now', { n: v.due }) : ''),
+    h('p', { class: 'muted small' }, Object.entries(MARK).map(([s, m]) => m + ' ' + STATUS[s]).join('   ')),
+    ...kinds.map(([kind, label]) => h('details', { open: kind === 'vaccine' },
+      h('summary', {}, label + ' (' + rec.counts[kind].given + '/' + rec.counts[kind].total + ')'),
+      table(['', t('Dose'), t('Status'), ''], rec.doses.filter((d) => d.kind === kind).map(row)))));
 }
 
 /** Change the child's animal and the reasons for special care (what the app lets you change). */
@@ -1178,7 +1259,8 @@ const PAGES = {
     ['users', t('Users'), 'group', adminUsers], ['linking', t('Linking'), 'link', adminLinking],
     ['reports', t('Reports'), 'description', adminReports]],
   chw: [['home', t('Home'), 'home', chwHome], ['families', t('My families'), 'family_restroom', chwFamilies],
-    ['questions', t('Chats'), 'chat_bubble', chwQuestions], ['reviewed', t('Reviewed'), 'fact_check', chwReviewed]],
+    ['questions', t('Chats'), 'chat_bubble', chwQuestions], ['missed', t('Missed vaccines'), 'vaccines', chwMissed],
+    ['reviewed', t('Reviewed'), 'fact_check', chwReviewed]],
   caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Chat with your health worker'), 'chat_bubble', cgAsk]],
 };
 const DETAIL = {

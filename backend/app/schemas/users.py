@@ -154,4 +154,6 @@ class UsageSummary(BaseModel):
     red_flags: int = 0
     outcomes: dict[str, int]
     awaiting_review: int
+    # Vaccine records of children under five (app.api.routes.admin._immunization).
+    immunization: dict[str, int] = {}
     generated_at: datetime

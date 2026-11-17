@@ -13,6 +13,7 @@ import '../messages/thread_screen.dart';
 import 'add_child_screen.dart';
 import 'care_schedule.dart';
 import 'caregiver_data.dart';
+import 'health_record_screen.dart';
 import 'caregiver_shell.dart';
 import 'child_profile_screen.dart';
 import 'play_ideas.dart';
@@ -419,10 +420,14 @@ class _CareCard extends StatelessWidget {
               ),
             ]),
           ),
-        const SizedBox(height: Space.s3),
-        Text(
-          tr('These are the usual ages. The app does not know what {firstName} has already had, so check the clinic booklet.', {'firstName': item.child.firstName}),
-          style: t.bodySmall,
+        const SizedBox(height: Space.s2),
+        // The usual ages; the health booklet screen has what was actually given.
+        TextButton.icon(
+          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => HealthRecordScreen(child: item.child))),
+          icon: const Icon(Icons.menu_book_outlined, size: 18),
+          label: Text(tr("Open {firstName}'s health booklet", {'firstName': item.child.firstName})),
         ),
       ]),
     );

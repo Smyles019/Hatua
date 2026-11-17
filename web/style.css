@@ -360,3 +360,31 @@ label.pick:has(input:focus-visible) { outline: 3px solid var(--sun-500); }
 
 /* The CHW's full check report: answers that count as not yet, or need a look. */
 tr.flagged td { font-weight: 600; }
+
+/* The health booklet (purple book): vaccine progress, dose marks, tick boxes. */
+.progress { height: 14px; border-radius: 999px; background: var(--plum-100); overflow: hidden;
+  border: 1px solid var(--plum-200); }
+.progress > div { height: 100%; background: var(--leaf); }
+td.mark { font-size: 1.15rem; width: 1.6rem; text-align: center; }
+.small { font-size: .85rem; }
+.tick { display: inline-flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+.tick input[type=date] { padding: .35rem .5rem; width: auto; }
+details > summary { cursor: pointer; font-weight: 700; margin: .8rem 0 .4rem; }
+
+/* Horizontal bars (CHW missed vaccines). */
+.hbar { display: grid; grid-template-columns: 11rem 1fr; gap: .6rem; align-items: center; margin: .3rem 0; }
+.hbar > div { display: flex; align-items: center; gap: .4rem; }
+.hbar i { display: block; height: 14px; border-radius: 4px; background: var(--sun-500); }
+
+/* One stacked bar with a key (admin vaccine records). Patterns keep the parts apart in
+   black and white print. */
+.stack { display: flex; height: 30px; border-radius: 8px; overflow: hidden; border: 1px solid var(--plum-200); }
+.stack > div { display: flex; align-items: center; justify-content: center; font-weight: 700;
+  font-size: .85rem; color: #1b1b1b; min-width: 1.6rem; }
+.key { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; }
+.key i { display: inline-block; width: .9rem; height: .9rem; border-radius: 3px; margin-right: .35rem;
+  vertical-align: -2px; border: 1px solid var(--plum-200); }
+.seg-ok { background: var(--leaf); }
+.seg-part { background: repeating-linear-gradient(45deg, var(--sky-500) 0 6px, var(--sky-100) 6px 10px); }
+.seg-none { background: var(--plum-100); }
+.seg-late { background: repeating-linear-gradient(-45deg, var(--blush-500) 0 4px, var(--blush-100) 4px 8px); }
