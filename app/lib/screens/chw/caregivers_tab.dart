@@ -9,6 +9,7 @@ import '../../widgets/child_avatar.dart';
 import '../../widgets/common.dart';
 import '../caregiver/add_child_screen.dart';
 import '../caregiver/child_profile_screen.dart';
+import '../messages/thread_screen.dart';
 import 'chw_data.dart';
 import 'link_caregiver_screen.dart';
 import '../../i18n/strings.dart';
@@ -136,6 +137,18 @@ class _CaregiversTabState extends State<CaregiversTab> {
                       ),
                   ],
                   SizedBox(height: Space.s3),
+                  // Either side can start the chat.
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => ThreadScreen(
+                              caregiverId: c.user.userId, caregiverName: c.user.fullName)));
+                    },
+                    icon: Icon(Icons.chat_bubble_outline_rounded),
+                    label: Text(tr('Message {name}', {'name': c.user.fullName.split(' ').first})),
+                  ),
+                  SizedBox(height: Space.s2),
                   FilledButton(
                     onPressed: () {
                       Navigator.of(ctx).pop();

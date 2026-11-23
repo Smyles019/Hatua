@@ -250,7 +250,7 @@ function signinScreen(form) {
       h('ul', { class: 'points' },
         h('li', {}, h('span', { class: 'ico bg-sky' }, icon('child_care')), t('A 5-minute check for children under five')),
         h('li', {}, h('span', { class: 'ico bg-sun' }, icon('health_and_safety')), t('Health workers follow up on flagged results')),
-        h('li', {}, h('span', { class: 'ico bg-blush' }, icon('chat_bubble')), t('Questions answered by your own health worker')))),
+        h('li', {}, h('span', { class: 'ico bg-blush' }, icon('chat_bubble')), t('Chat with your own health worker')))),
     h('div', { class: 'form-side' }, form)));
 }
 
@@ -440,9 +440,12 @@ function addPhonePage(idToken, who) {
   } },
     h('a', { class: 'brand', href: '#' }, svg(MARK), 'Hatua'),
     h('h2', {}, t('One more step')),
-    h('p', { class: 'muted' }, t('Welcome, {name}. Add your phone number to create your Hatua account for {email}.', { name: who.full_name, email: who.email })),
+    who.role === 'chw'
+      // An invited health worker finishing their account with Google
+      ? h('p', { class: 'muted' }, t('Welcome, {name}. Add your phone number to finish setting up your health worker account for {email}.', { name: who.full_name, email: who.email }))
+      : h('p', { class: 'muted' }, t('Welcome, {name}. Add your phone number to create your Hatua account for {email}.', { name: who.full_name, email: who.email })),
     field(t('Your phone number'), phone),
-    h('p', { class: 'muted' }, t('Your community health worker uses it to find you and link to your account.')),
+    who.role === 'chw' ? null : h('p', { class: 'muted' }, t('Your community health worker uses it to find you and link to your account.')),
     button,
     h('p', { style: 'text-align:center' }, h('button', { type: 'button', class: 'link', onclick: () => loginPage() }, t('Back to sign in'))));
   signinScreen(form);
@@ -457,7 +460,7 @@ async function adminOverview() {
   page({ title: t('Overview'), sub: t('How Hatua is being used, in totals. Individual children are only seen by their caregiver and health worker.') },
     h('div', { class: 'tiles' },
       tile('family_restroom', 'bg-sun', s.users.caregiver, t('Caregivers'), { href: '#users' }),
-      tile('medical_services', 'bg-sky', s.users.chw, t('Health workers'), { href: '#users' }),
+      tile('medical_services', 'bg-sky', s.users.chw, t('Health workers'), { href: '#chws' }),
       tile('child_care', 'bg-blush', s.children, t('Children')),
       tile('pending_actions', 'bg-plum', s.awaiting_review, t('Waiting for a health worker'), { warn: true })),
     h('h2', {}, t('Checks')),
@@ -471,7 +474,66 @@ async function adminOverview() {
       h('div', { class: 'card' }, h('h3', {}, t('Flags')),
         table([t('Flag'), t('Count')], [
           h('tr', {}, h('td', {}, t('Hearing, eyes or growth need a look')), h('td', {}, s.red_flags || 0)),
-          h('tr', {}, h('td', {}, t('Answers that do not fit together')), h('td', {}, s.anomaly_flags))]))));
+          h('tr', {}, h('td', {}, t('Answers that do not fit together')), h('td', {}, s.anomaly_flags))]))),
+    vaccineCoverage(s.immunization));
+}
+
+/** Admin: children under five by the state of their vaccine record, as one stacked bar
+ *  with a key. Each part also carries its number and a pattern, so it reads in print. */
+function vaccineCoverage(im) {
+  if (!im || !im.children) return null;
+  const parts = [['up_to_date', t('Up to date'), 'seg-ok'], ['partly_recorded', t('Partly copied from the booklet'), 'seg-part'],
+    ['not_started', t('Nothing ticked yet'), 'seg-none'], ['overdue', t('A vaccine overdue'), 'seg-late']];
+  return h('div', { class: 'card' }, h('h3', {}, t('Vaccine records')),
+    h('p', { class: 'muted' }, t('{n} children with at least one vaccine due so far.', { n: im.children })),
+    h('div', { class: 'stack', role: 'img', 'aria-label': parts.map(([k, label]) => label + ': ' + im[k]).join(', ') },
+      parts.filter(([k]) => im[k]).map(([k, , cls]) => h('div', { class: cls, style: 'flex:' + im[k] }, String(im[k])))),
+    h('ul', { class: 'key' }, parts.map(([k, label, cls]) => h('li', {}, h('i', { class: cls }), label + ': ' + im[k]))));
+}
+
+/** Health workers: invite one by name and email, see who has set up their account. */
+async function adminChws() {
+  const chws = await api('/admin/chws');
+  const status = (c) => {
+    if (!c.is_active) return h('span', { class: 'chip flag' }, t('Deactivated'));
+    if (c.invite_pending) return h('span', { class: 'chip medium' }, t('Invited'));
+    return h('span', { class: 'chip low' }, t('Active'));
+  };
+  const rows = chws.map((c) => h('tr', {},
+    h('td', {}, person(initial(c.full_name), c.full_name, c.email || '')),
+    h('td', {}, c.phone_number || h('span', { class: 'muted' }, t('Not added yet'))),
+    h('td', {}, c.caregivers),
+    h('td', {}, status(c), c.invite_pending && c.invited_at
+      ? h('div', { class: 'muted' }, t('Invite sent {date}', { date: fmtDate(c.invited_at) })) : null),
+    h('td', {}, c.invite_pending && c.is_active
+      ? h('button', { class: 'small second', onclick: (ev) => run(ev.target, async () => {
+        await api('/admin/chws/' + c.user_id + '/invite', { method: 'POST' });
+        toast(t('A new invite was sent to {email}.', { email: c.email }));
+        await adminChws();
+      }) }, icon('forward_to_inbox'), t('Resend invite')) : '')));
+
+  const name = h('input', { required: true, autocomplete: 'off' });
+  const email = h('input', { type: 'email', required: true, autocomplete: 'off' });
+  const send = h('button', { type: 'submit' }, icon('send'), t('Send invite'));
+  const form = h('form', { class: 'card', onsubmit: (ev) => {
+    ev.preventDefault();
+    run(send, async () => {
+      await api('/admin/chws', { method: 'POST', body: { full_name: name.value, email: email.value } });
+      toast(t('Invite sent to {email}.', { email: email.value }));
+      await adminChws();
+    });
+  } }, h('h3', {}, t('Add a health worker')),
+    h('div', { class: 'row' }, field(t('Full name'), name), field(t('Email'), email), send),
+    h('p', { class: 'muted' }, t('They get an email with a link to choose a password and add their phone number. They can also sign in with Google using this email.')));
+
+  const waiting = chws.filter((c) => c.invite_pending && c.is_active).length;
+  page({ title: t('Health workers'), sub: t('Community health workers review flagged checks and chat with caregivers.') },
+    form,
+    waiting ? note(t(waiting === 1 ? '1 health worker has not set up their account yet. Caregivers can be linked to them once they have.'
+      : '{n} health workers have not set up their accounts yet. Caregivers can be linked to them once they have.', { n: waiting })) : null,
+    h('div', { class: 'card' }, chws.length
+      ? table([t('Name'), t('Phone'), t('Caregivers'), t('Status'), ''], rows)
+      : empty(t('No health workers yet. Add one above.'), 'medical_services')));
 }
 
 async function adminUsers() {
@@ -487,7 +549,9 @@ async function adminUsers() {
         h('td', {}, person(initial(u.full_name), u.full_name, u.email || '')),
         h('td', {}, ROLE[u.role]), h('td', {}, u.phone_number),
         h('td', {}, u.role === 'caregiver' ? (chws.get(u.linked_chw_id) || t('No health worker yet')) : ''),
-        h('td', {}, h('span', { class: 'chip ' + (u.is_active ? 'low' : 'flag') }, u.is_active ? t('Active') : t('Deactivated'))),
+        h('td', {}, !u.is_active ? h('span', { class: 'chip flag' }, t('Deactivated'))
+          : u.invite_pending ? h('span', { class: 'chip medium' }, t('Invited'))
+            : h('span', { class: 'chip low' }, t('Active'))),
         h('td', {}, u.user_id === me.user_id ? '' : h('button', { class: 'small second', onclick: (ev) => run(ev.target, async () => {
           await api('/admin/users/' + u.user_id, { method: 'PATCH', body: { is_active: !u.is_active } });
           toast(t(u.is_active ? '{name} was deactivated.' : '{name} was reactivated.', { name: u.full_name }));
@@ -524,7 +588,8 @@ async function adminUsers() {
 
 async function adminLinking() {
   const users = await api('/admin/users');
-  const chws = users.filter((u) => u.role === 'chw' && u.is_active);
+  // A health worker still waiting on their invite cannot take caregivers yet.
+  const chws = users.filter((u) => u.role === 'chw' && u.is_active && !u.invite_pending);
   const caregivers = users.filter((u) => u.role === 'caregiver' && u.is_active)
     .sort((a, b) => (a.linked_chw_id ? 1 : 0) - (b.linked_chw_id ? 1 : 0) || a.full_name.localeCompare(b.full_name));
   const unlinked = caregivers.filter((c) => !c.linked_chw_id).length;
@@ -539,7 +604,7 @@ async function adminLinking() {
     }));
     return h('tr', {}, h('td', {}, person(initial(c.full_name), c.full_name, c.email || '')), h('td', {}, c.phone_number), h('td', {}, pick));
   });
-  page({ title: t('Linking'), sub: t('Each caregiver needs a health worker, or their flagged results and questions reach nobody.') },
+  page({ title: t('Linking'), sub: t('Each caregiver needs a health worker, or their flagged results and messages reach nobody.') },
     unlinked ? note(t(unlinked === 1 ? '1 caregiver has no health worker yet. They are listed first.' : '{n} caregivers have no health worker yet. They are listed first.', { n: unlinked })) : null,
     h('div', { class: 'card' }, caregivers.length
       ? table([t('Caregiver'), t('Phone'), t('Health worker')], rows) : empty(t('No caregivers yet.'), 'family_restroom')));
@@ -620,16 +685,17 @@ const DANGER = [
   t('is a young baby whose palms, soles or eyes look yellow'),
 ];
 
-/** A message thread. path is /messages (caregiver) or /messages/threads/<id> (health worker). */
+/** The chat between a caregiver and their health worker. path is /messages (caregiver)
+ * or /messages/threads/<id> (health worker). Either side can write first. */
 async function threadView(path, head, opts = {}) {
   const th = await api(path);
-  const text = h('textarea', { rows: 3, maxlength: 1000, 'aria-label': opts.asChw ? t('Your reply') : t('Your question'),
-    placeholder: opts.asChw ? t('Write your reply') : t('Write your question') });
-  // Caregivers see the danger signs next to the send button, so an emergency goes to a
-  // health facility instead of waiting in this thread.
-  const send = h('button', {}, icon('send'), opts.asChw ? t('Send reply') : t('None of these apply. Send my question'));
+  const text = h('textarea', { rows: 3, maxlength: 1000, 'aria-label': t('Your message'),
+    placeholder: t('Write a message') });
+  // Caregivers see the danger signs beside the chat the whole time, so an emergency goes
+  // to a health facility instead of waiting here.
+  const send = h('button', {}, icon('send'), t('Send'));
   send.addEventListener('click', () => run(send, async () => {
-    if (!text.value.trim()) throw new Error(opts.asChw ? t('Write your reply first.') : t('Write your question first.'));
+    if (!text.value.trim()) throw new Error(t('Write a message first.'));
     await api(path, { method: 'POST', body: { body: text.value, prediction_id: opts.predictionId || undefined } });
     await threadView(path, head, opts);
   }));
@@ -638,14 +704,12 @@ async function threadView(path, head, opts = {}) {
       ? h('div', { class: 'thread' }, th.messages.map((m) => h('div', { class: 'bubble' + (m.from_me ? ' me' : '') },
           m.about ? h('b', {}, t("About {name}'s check. ", { name: m.about.child_name })) : null, m.body,
           h('small', {}, (m.from_me ? t('You') : m.sender_name) + ', ' + fmtTime(m.created_at)))))
-      : empty(t('No messages yet.'), 'chat_bubble'),
-    th.messages.length ? h('p', { class: 'status' }, th.waiting_for_chw
-      ? (opts.asChw ? t('Waiting for your reply') : t('Sent. Waiting for a reply.')) : (opts.asChw ? t('You replied') : t('Answered'))) : null,
+      : empty(t('No messages yet. Send one below to start the chat.'), 'chat_bubble'),
     text, h('p', {}, send));
   const side = opts.asChw ? null : h('div', {},
     h('div', { class: 'note' }, icon('schedule'), h('div', {}, th.chw
       ? t('{name} is your community health worker. They reply when they can, often within a day or two.', { name: th.chw.full_name })
-      : t('You are not linked to a community health worker yet. You can still write; your question reaches them once you are linked.'))),
+      : t('You are not linked to a community health worker yet. You can still write a message; it will reach them once you are linked.'))),
     h('div', { class: 'alert' }, icon('emergency'), h('div', {},
       h('b', {}, t('Go to a health facility now, and do not wait for a reply, if your child:')),
       h('ul', { class: 'plain' }, DANGER.map((d) => h('li', {}, d))))));
@@ -676,7 +740,7 @@ async function chwHome() {
   page({ title: t('Hello, {name}', { name: me.full_name.split(' ')[0] }), sub: t('Children who need a follow-up are listed below, the highest risk first.') },
     h('div', { class: 'tiles' },
       tile('flag', 'bg-blush', open.length, t('Cases waiting for review'), { warn: true }),
-      tile('chat_bubble', 'bg-sun', waiting, t('Questions waiting for a reply'), { warn: true, href: '#questions' }),
+      tile('chat_bubble', 'bg-sun', waiting, t('Chats waiting for a reply'), { warn: true, href: '#questions' }),
       tile('family_restroom', 'bg-sky', families.length, t('Families linked to you'), { href: '#families' })),
     h('div', { class: 'card' }, h('h3', {}, t('Flagged cases')),
       open.length ? caseTable(open) : empty(t('All caught up. No children need a follow-up right now.'), 'task_alt')));
@@ -720,9 +784,12 @@ async function chwCase(id) {
         h('div', { class: 'card' }, h('h3', {}, t('Log outcome')),
           h('p', { class: 'muted' }, t('The caregiver sees a short fixed message for the first two.')),
           pick, h('p', {}, save)),
+        h('div', { class: 'card' }, h('h3', {}, t('Full report')),
+          h('p', { class: 'muted' }, t('Every question the caregiver was asked and the answer they gave, to read here or as a PDF.')),
+          h('p', {}, h('a', { href: '#report/' + id }, t('Open the full report')))),
         h('div', { class: 'card' }, h('h3', {}, t('Family')),
           person(initial(a.caregiver.full_name), a.caregiver.full_name, a.caregiver.phone_number + (a.location ? ', ' + a.location : '')),
-          h('p', {}, h('a', { href: '#thread/' + a.caregiver.user_id }, t('Messages with {name}', { name: a.caregiver.full_name.split(' ')[0] })))),
+          h('p', {}, h('a', { href: '#thread/' + a.caregiver.user_id }, t('Chat with {name}', { name: a.caregiver.full_name.split(' ')[0] })))),
         h('div', { class: 'card' }, h('h3', {}, t('About {name}', { name: a.child_name })),
           a.care_factors && a.care_factors.length
             ? h('ul', { class: 'plain' }, a.care_factors.map((f) => h('li', {}, CARE[f] || f)))
@@ -730,6 +797,59 @@ async function chwCase(id) {
           h('p', {}, g ? t('Latest measurement ({date}): {value}', { date: fmtDate(g.measured_on),
               value: [g.weight_kg ? g.weight_kg + ' kg' : null, g.height_cm ? g.height_cm + ' cm' : null].filter(Boolean).join(', ') })
             : h('span', { class: 'muted' }, t('No weight or height entered yet.')))))));
+}
+
+/** CHW only: the full report of one check, every question and answer, with a PDF. */
+async function chwReport(id) {
+  const r = await api('/chw/cases/' + id + '/report');
+  const RESULT = { done: t('Achieved'), not_yet: t('Not yet'), dont_know: t('Not sure'), concern: t('Needs a look'), ok: '' };
+  const answers = (rows) => table([t('No.'), t('Question'), t('Answer'), t('Counts as')], rows.map((a, i) =>
+    h('tr', { class: a.result === 'not_yet' || a.result === 'concern' ? 'flagged' : '' },
+      h('td', {}, String(i + 1)), h('td', {}, a.question), h('td', {}, a.answer_label), h('td', {}, RESULT[a.result]))));
+  const pdf = h('button', {}, icon('picture_as_pdf'), ' ', t('Open as PDF'));
+  pdf.addEventListener('click', () => {
+    const tab = window.open('', '_blank'); // opened now, so the browser does not block it
+    run(pdf, async () => {
+      try {
+        const link = await api('/chw/cases/' + id + '/report-link', { method: 'POST' });
+        if (tab) tab.location = link.url; else location.href = link.url;
+      } catch (e) { if (tab) tab.close(); throw e; }
+    });
+  });
+  const n = r.counts;
+  page({ title: t('Full report: {name}', { name: r.child.first_name }), back: ['#case/' + id, t('Back to the case')],
+    sub: t('Checked {when} by {name}', { when: fmtTime(r.submitted_at), name: r.caregiver.full_name }), chips: flagChips(r) },
+    h('div', { class: 'card' },
+      h('p', {}, h('b', {}, r.risk_label), r.outcome_label ? ' · ' + t('Outcome: {outcome}', { outcome: r.outcome_label }) : ''),
+      h('p', {}, t('{done} achieved, {not_yet} not yet, {dont_know} not sure.', n)),
+      r.red_flags.length ? h('ul', { class: 'plain' }, r.red_flags.map((f) => h('li', {}, f.kind_label + ': ' + f.label))) : null,
+      h('p', {}, pdf)),
+    ...r.sections.map((s) => h('div', { class: 'card' },
+      h('h3', {}, s.label, s.status === 'not_assessed' ? '' : ' · ' + (s.status === 'needs_support' ? t('Needs more practice') : t('On track'))),
+      answers(s.answers))),
+    r.screening.length ? h('div', { class: 'card' }, h('h3', {}, t('Hearing and eyes')), answers(r.screening)) : null);
+}
+
+/** CHW: children of their families with vaccines more than 4 weeks late (defaulter
+ *  tracing), with a bar for each vaccine. */
+async function chwMissed() {
+  const list = await api('/chw/missed-doses');
+  const counts = {};
+  list.forEach((c) => c.doses.forEach((d) => { counts[d.name] = (counts[d.name] || 0) + 1; }));
+  const bars = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const most = bars.length ? bars[0][1] : 1;
+  page({ title: t('Missed vaccines'),
+    sub: t('Doses more than 4 weeks late, due since the child joined Hatua. Check the booklet with the caregiver: the dose may have been given but not ticked.') },
+    ...(list.length ? [
+      h('div', { class: 'card' }, h('h3', {}, t('Children missing each vaccine')),
+        bars.map(([name, n]) => h('div', { class: 'hbar' }, h('span', {}, name),
+          h('div', {}, h('i', { style: 'width:' + Math.round(85 * n / most) + '%' }), h('b', {}, String(n)))))),
+      h('div', { class: 'card' }, table([t('Child'), t('Late doses'), t('Caregiver'), ''], list.map((c) => h('tr', {},
+        h('td', {}, c.child_name + ', ' + ageLabel(c.age_months)),
+        h('td', {}, c.doses.map((d) => h('div', {}, d.name + ' · ' + t('{n} weeks late', { n: Math.floor(d.days_overdue / 7) })))),
+        h('td', {}, c.caregiver.full_name, h('div', { class: 'muted small' }, c.caregiver.phone_number || '')),
+        h('td', {}, h('a', { href: '#thread/' + c.caregiver.user_id }, t('Message')))))))]
+      : [h('div', { class: 'card' }, empty(t('No missed vaccines'), 'verified'))]));
 }
 
 async function chwFamilies() {
@@ -746,24 +866,24 @@ async function chwFamilies() {
   } }, h('h3', {}, t('Link a caregiver')),
     h('p', { class: 'muted' }, t('For a caregiver who already has a Hatua account.')),
     h('div', { class: 'row' }, field(t('Their phone number'), phone), link));
-  page({ title: t('My families'), sub: t('Caregivers linked to you. Their flagged checks and questions come to you.') },
+  page({ title: t('My families'), sub: t('Caregivers linked to you. Their flagged checks and messages come to you.') },
     h('div', { class: 'split' },
       h('div', { class: 'card' }, families.length ? table([t('Caregiver'), t('Children'), t('Open cases'), ''], families.map((f) => h('tr', {},
         h('td', {}, person(initial(f.full_name), f.full_name, f.phone_number)), h('td', {}, f.children),
         h('td', {}, f.open_cases ? h('span', { class: 'chip medium' }, f.open_cases) : 0),
-        h('td', {}, h('a', { href: '#thread/' + f.user_id }, t('Messages')))))) : empty(t('No caregivers are linked to you yet.'), 'family_restroom')),
+        h('td', {}, h('a', { href: '#thread/' + f.user_id }, t('Chat')))))) : empty(t('No caregivers are linked to you yet.'), 'family_restroom')),
       linkForm));
 }
 
 async function chwQuestions() {
   const threads = await api('/messages/threads');
-  page({ title: t('Questions'), sub: t('Questions from caregivers linked to you. Unanswered ones are first.') },
+  page({ title: t('Chats'), sub: t('Chats with caregivers linked to you. Ones waiting for your reply come first.') },
     h('div', { class: 'card' }, threads.length ? table([t('Caregiver'), t('Latest message'), t('When'), ''], threads.map((th) => linkRow('thread/' + th.caregiver.user_id,
       h('td', {}, person(initial(th.caregiver.full_name), th.caregiver.full_name)),
       h('td', {}, th.last_message.body.slice(0, 90)),
       h('td', {}, fmtTime(th.last_message.created_at)),
       h('td', {}, th.waiting_for_chw ? h('span', { class: 'chip medium' }, t('Waiting for your reply')) : h('span', { class: 'chip low' }, t('Replied'))))))
-      : empty(t('When a caregiver linked to you asks a question, it shows here.'), 'chat_bubble')));
+      : empty(t('Chats with caregivers linked to you show here. To start one, choose Chat next to a family under My families.'), 'chat_bubble')));
 }
 
 // ---------- caregiver ----------
@@ -978,7 +1098,52 @@ async function cgChild(id) {
       h('div', {}, checks.length
         ? checks.map((a, i) => [h('h2', { style: i === 0 ? 'margin-top:0' : null }, i === 0 ? t('Latest check') : t('Check from {date}', { date: fmtDate(a.submitted_at) })), cgResult(a, false)])
         : h('div', { class: 'card' }, empty(t('Start the first check to see how {name} is growing.', { name: child.first_name }), 'child_care'))),
-      h('div', {}, careCard(child), growthCard(child, () => cgChild(id)))));
+      h('div', {}, await bookletCard(child, () => cgChild(id), true), careCard(child), growthCard(child, () => cgChild(id)))));
+}
+
+/** The purple book's vaccine and vitamin A pages: a progress bar and the doses by visit,
+ *  each with the date given or a date box to tick it (backend GET /children/{id}/record). */
+async function bookletCard(child, reload, canEdit) {
+  const rec = await api('/children/' + child.child_id + '/record');
+  const MARK = { given: '●', due: '◐', overdue: '⊗', upcoming: '○', not_recorded: '◌' };
+  const STATUS = { given: t('Given'), due: t('Due now'), overdue: t('Overdue'), upcoming: t('Coming up'),
+    not_recorded: t('Not copied from the booklet') };
+  const v = rec.counts.vaccine;
+  const pct = v.total ? Math.round(100 * v.given / v.total) : 0;
+  const row = (d) => {
+    let action = null;
+    if (canEdit && d.status === 'given') {
+      action = h('button', { class: 'link', onclick: () => run(null, async () => {
+        await api('/children/' + child.child_id + '/record/' + d.item, { method: 'DELETE' }); reload();
+      }) }, t('Untick'));
+    } else if (canEdit && d.status !== 'upcoming') {
+      const day = h('input', { type: 'date', max: new Date().toISOString().slice(0, 10), min: child.date_of_birth,
+        'aria-label': t('Date given') });
+      const save = h('button', { class: 'small' }, t('Given'));
+      save.addEventListener('click', () => run(save, async () => {
+        if (!day.value) throw new Error(t('Choose the date it was given.'));
+        await api('/children/' + child.child_id + '/record/' + d.item, { method: 'PUT', body: { given_on: day.value } });
+        reload();
+      }));
+      action = h('span', { class: 'tick' }, day, save);
+    }
+    return h('tr', { class: d.status === 'overdue' ? 'flagged' : '' },
+      h('td', { 'aria-hidden': 'true', class: 'mark' }, MARK[d.status]),
+      h('td', {}, d.name, h('div', { class: 'muted small' }, d.visit)),
+      h('td', {}, d.status === 'given' ? fmtDate(d.given_on) : STATUS[d.status] + (d.status === 'upcoming' ? ', ' + fmtDate(d.due_on) : '')),
+      h('td', {}, action));
+  };
+  const kinds = [['vaccine', t('Vaccines')], ['vitamin_a', t('Vitamin A')], ['deworming', t('Deworming')]];
+  return h('div', { class: 'card' },
+    h('h3', {}, t('Health booklet')),
+    h('div', { class: 'progress', role: 'img', 'aria-label': t('{done} of {total} vaccines given', { done: v.given, total: v.total }) },
+      h('div', { style: 'width:' + pct + '%' })),
+    h('p', {}, t('{done} of {total} vaccines given', { done: v.given, total: v.total }),
+      v.overdue ? ' · ' + t('{n} overdue', { n: v.overdue }) : '', v.due ? ' · ' + t('{n} due now', { n: v.due }) : ''),
+    h('p', { class: 'muted small' }, Object.entries(MARK).map(([s, m]) => m + ' ' + STATUS[s]).join('   ')),
+    ...kinds.map(([kind, label]) => h('details', { open: kind === 'vaccine' },
+      h('summary', {}, label + ' (' + rec.counts[kind].given + '/' + rec.counts[kind].total + ')'),
+      table(['', t('Dose'), t('Status'), ''], rec.doses.filter((d) => d.kind === kind).map(row)))));
 }
 
 /** Change the child's animal and the reasons for special care (what the app lets you change). */
@@ -1043,39 +1208,93 @@ async function cgCheck(id) {
 async function cgAsk() {
   const about = askAbout; askAbout = null;
   await threadView('/messages', {
-    title: about ? t("Ask about {name}'s check", { name: about.name }) : t('Ask your health worker'),
-    sub: t('Write your question. Your health worker replies here.') },
+    title: about ? t("Chat about {name}'s check", { name: about.name }) : t('Chat with your health worker'),
+    sub: t('Your health worker replies here when they can.') },
     { predictionId: about ? about.id : null });
+}
+
+/** The Hatua assistant (backend/app/services/assistant.py has the safety design). Only
+ * the chosen child's age goes with a question, never a name. */
+async function cgAssistant() {
+  const [s, children] = await Promise.all([api('/assistant'), api('/children')]);
+  const text = h('textarea', { rows: 3, maxlength: 1000, 'aria-label': t('Your question'), placeholder: t('Ask a question') });
+  const about = h('select', { 'aria-label': t('About which child') }, h('option', { value: '' }, t('No child in particular')),
+    children.map((c) => h('option', { value: c.child_id }, c.first_name + ', ' + ageLabel(c.age_months))));
+  const send = h('button', {}, icon('send'), t('Send'));
+  send.addEventListener('click', () => run(send, async () => {
+    if (!text.value.trim()) throw new Error(t('Write a message first.'));
+    send.lastChild.textContent = t('Writing an answer...');
+    await api('/assistant', { method: 'POST', body: { body: text.value, child_id: about.value || undefined } });
+    await cgAssistant();
+  }));
+  const clear = s.messages.length ? h('button', { class: 'second small', onclick: (ev) => run(ev.target, async () => {
+    if (!window.confirm(t('Clear this conversation?'))) return;
+    await api('/assistant', { method: 'DELETE' });
+    await cgAssistant();
+  }) }, icon('delete'), t('Clear conversation')) : null;
+  const conversation = h('div', { class: 'card' },
+    s.messages.length
+      ? h('div', { class: 'thread' }, s.messages.map((m) => h('div', { class: 'bubble' + (m.role === 'user' ? ' me' : '') + (m.flagged && m.role !== 'user' ? ' urgent' : '') },
+          m.flagged && m.role !== 'user' ? icon('emergency') : null, m.body)))
+      : empty(t('Ask about how your child is growing, play ideas, feeding, sleep or everyday care.'), 'auto_awesome'),
+    s.available
+      // Two separate fields with their own labels and a gap, so they do not read as one box.
+      ? h('div', { class: 'ask-form' }, field(t('About'), about), field(t('Your question'), text), h('p', {}, send))
+      : h('p', { class: 'muted' }, t('The assistant is not switched on yet.')));
+  const side = h('div', {},
+    h('div', { class: 'note' }, icon('info'), h('div', {},
+      t('Answers come from AI and can be wrong. It does not diagnose or suggest medicines, and it is not for emergencies. Do not type names or other personal details.'),
+      h('p', {}, h('a', { href: '#ask' }, t('Chat with your health worker'))))),
+    h('div', { class: 'alert' }, icon('emergency'), h('div', {},
+      h('b', {}, t('Go to a health facility now, and do not wait for a reply, if your child:')),
+      h('ul', { class: 'plain' }, DANGER.map((d) => h('li', {}, d))))));
+  page({ title: t('Hatua assistant'), sub: t('Questions about growth, play and everyday care.'), chips: clear },
+    h('div', { class: 'split' }, conversation, side));
 }
 
 // ---------- pages by role, and the router ----------
 
 const PAGES = {
-  admin: [['overview', t('Overview'), 'dashboard', adminOverview], ['users', t('Users'), 'group', adminUsers],
-    ['linking', t('Linking'), 'link', adminLinking], ['reports', t('Reports'), 'description', adminReports]],
+  admin: [['overview', t('Overview'), 'dashboard', adminOverview], ['chws', t('Health workers'), 'medical_services', adminChws],
+    ['users', t('Users'), 'group', adminUsers], ['linking', t('Linking'), 'link', adminLinking],
+    ['reports', t('Reports'), 'description', adminReports]],
   chw: [['home', t('Home'), 'home', chwHome], ['families', t('My families'), 'family_restroom', chwFamilies],
-    ['questions', t('Questions'), 'chat_bubble', chwQuestions], ['reviewed', t('Reviewed'), 'fact_check', chwReviewed]],
-  caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Ask your health worker'), 'chat_bubble', cgAsk]],
+    ['questions', t('Chats'), 'chat_bubble', chwQuestions], ['missed', t('Missed vaccines'), 'vaccines', chwMissed],
+    ['reviewed', t('Reviewed'), 'fact_check', chwReviewed]],
+  caregiver: [['children', t('My children'), 'child_care', cgChildren], ['ask', t('Chat with your health worker'), 'chat_bubble', cgAsk]],
 };
 const DETAIL = {
-  chw: { case: chwCase, thread: async (id) => {
+  chw: { case: chwCase, report: chwReport, thread: async (id) => {
     const th = await api('/messages/threads/' + id);
-    await threadView('/messages/threads/' + id, { title: th.caregiver.full_name, back: ['#questions', t('Questions')],
+    await threadView('/messages/threads/' + id, { title: th.caregiver.full_name, back: ['#questions', t('Chats')],
       sub: th.caregiver.phone_number }, { asChw: true });
   } },
   caregiver: { child: cgChild, check: cgCheck, edit: cgEditChild },
 };
 // Pages with no menu entry and no id in the address.
-const HIDDEN = { caregiver: { 'add-child': cgAddChild } };
+// The assistant opens from the round button in the corner (assistantButton).
+const HIDDEN = { caregiver: { 'add-child': cgAddChild, assistant: cgAssistant } };
+
+/** The round Hatua assistant button in the bottom-right corner, on caregiver pages. */
+function assistantButton(show) {
+  let fab = document.getElementById('assistant-fab');
+  if (!fab) {
+    fab = h('a', { id: 'assistant-fab', class: 'fab', href: '#assistant', title: t('Hatua assistant'),
+      'aria-label': t('Hatua assistant') }, icon('auto_awesome'));
+    document.body.append(fab);
+  }
+  fab.hidden = !show;
+}
 
 async function route() {
-  if (!me) return;
+  if (!me) { assistantButton(false); return; }
   const pages = PAGES[me.role];
   const [name, id] = location.hash.replace(/^#/, '').split('/');
   const pg = pages.find((p) => p[0] === name);
   const hidden = !id && HIDDEN[me.role] && HIDDEN[me.role][name];
   const detail = id ? DETAIL[me.role] && DETAIL[me.role][name] : hidden && (() => hidden());
   if (!pg && !detail) { location.hash = pages[0][0]; return; }
+  assistantButton(me.role === 'caregiver' && name !== 'assistant');
   document.getElementById('nav').replaceChildren(...pages.map((p) =>
     h('a', { href: '#' + p[0], class: p[0] === name ? 'on' : '', 'aria-current': p[0] === name ? 'page' : null }, icon(p[2]), p[1])));
   main().replaceChildren(h('p', { class: 'muted' }, t('Loading...')));

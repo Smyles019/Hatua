@@ -6,8 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import admin, assessments, auth, children, chw, dev, messages
+from app.api.routes import admin, assessments, assistant, auth, children, chw, dev, messages
 from app.core.config import settings
+from app.core.idempotency import IdempotencyMiddleware
 from app.services.i18n import _swahili
 
 settings.check()
@@ -19,9 +20,12 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(children.router, prefix="/children", tags=["children"])
 app.include_router(assessments.router, prefix="/assessments", tags=["assessments"])
 app.include_router(chw.router, prefix="/chw", tags=["chw"])
-app.include_router(messages.router, prefix="/messages", tags=["ask a CHW"])
+app.include_router(messages.router, prefix="/messages", tags=["chat with a CHW"])
+app.include_router(assistant.router, prefix="/assistant", tags=["Hatua assistant"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 
+# Changes the phone queued while offline can arrive twice; the second gets the first's answer.
+app.add_middleware(IdempotencyMiddleware)
 app.add_middleware(CORSMiddleware,
                    allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
                    allow_methods=["*"], allow_headers=["*"])
@@ -49,6 +53,12 @@ if WEB.is_dir():
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon():
         return FileResponse(WEB / "favicon.svg", media_type="image/svg+xml")
+
+    # Outside development the bare domain opens the website (in development / is the test UI).
+    if not settings.dev_mode:
+        @app.get("/", include_in_schema=False)
+        def home():
+            return RedirectResponse("/web/")
 
 
 @app.get("/i18n/sw.js", include_in_schema=False)

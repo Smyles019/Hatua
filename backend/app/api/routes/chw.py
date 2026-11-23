@@ -4,19 +4,25 @@ A result reaches the CHW when it is medium or high risk or carries an anomaly fl
 and the child's caregiver is linked to that CHW.
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException
+import jwt
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require
 from app.api.routes.auth import add_user, send_verification
+from app.core.config import settings
+from app.core.security import create_link_token, link_still_matches, read_link_token
 from app.db.models import CaregiverInput, Child, PredictionResult, User
 from app.db.session import get_db
 from app.schemas.assessment import OutcomeIn
 from app.schemas.users import EnrolCaregiver, LinkByPhone, UserOut
-from app.services.results import needs_chw, to_out
+from app.services import immunization, notify, report, report_pdf
+from app.services.i18n import tr
+from app.services.results import age_in_months, needs_chw, to_out
 
 router = APIRouter()
 chw_only = require("chw")
@@ -104,8 +110,8 @@ def cases(include_reviewed: bool = False, user: User = Depends(chw_only),
 
 
 @router.post("/cases/{prediction_id}/outcome")
-def record_outcome(prediction_id: uuid.UUID, body: OutcomeIn, user: User = Depends(chw_only),
-                   db: Session = Depends(get_db)):
+def record_outcome(prediction_id: uuid.UUID, body: OutcomeIn, bg: BackgroundTasks,
+                   user: User = Depends(chw_only), db: Session = Depends(get_db)):
     row = db.execute(select(PredictionResult, CaregiverInput, Child, User)
                      .join(CaregiverInput, PredictionResult.input_id == CaregiverInput.input_id)
                      .join(Child, CaregiverInput.child_id == Child.child_id)
@@ -113,11 +119,103 @@ def record_outcome(prediction_id: uuid.UUID, body: OutcomeIn, user: User = Depen
                      .where(PredictionResult.prediction_id == prediction_id)).first()
     if row is None or row[3].linked_chw_id != user.user_id:
         raise HTTPException(404, "case not found")  # same answer for someone else's case
-    pred, inp, child, _ = row
+    pred, inp, child, caregiver = row
     if not needs_chw(pred.risk_level, pred.anomaly_flag, pred.red_flags):
         raise HTTPException(409, "low-risk results without a flag are not CHW cases")
+    changed = pred.chw_outcome != body.outcome
     pred.chw_outcome = body.outcome
     pred.reviewed_by = user.user_id
     pred.reviewed_at = datetime.now(timezone.utc)
     db.commit()
+    if changed:  # saving the same outcome again tells the caregiver nothing new
+        notify.outcome_recorded(bg, caregiver, child, pred)
     return to_out(pred, inp, child, user.language)
+
+
+# ---- Missed vaccines (defaulter tracing) ----
+
+@router.get("/missed-doses")
+def missed_doses(user: User = Depends(chw_only), db: Session = Depends(get_db)):
+    """Children of this CHW's families with a vaccine more than 4 weeks overdue, the
+    longest overdue first. Only doses that fell due after the child was added to Hatua
+    count (app.services.immunization): older ones may just not have been copied from the
+    booklet."""
+    rows = db.execute(select(Child, User).join(User, Child.caregiver_id == User.user_id)
+                      .where(User.linked_chw_id == user.user_id, User.is_active)).all()
+    out = []
+    for child, caregiver in rows:
+        if age_in_months(child.date_of_birth) >= 60:
+            continue
+        doses = immunization.missed(child)
+        if doses:
+            out.append({"child_id": child.child_id, "child_name": child.first_name,
+                        "child_avatar_id": child.avatar_id,
+                        "age_months": age_in_months(child.date_of_birth),
+                        "caregiver": {"user_id": caregiver.user_id,
+                                      "full_name": caregiver.full_name,
+                                      "phone_number": caregiver.phone_number},
+                        "doses": [{**d, "name": tr(d["name"], user.language)} for d in doses],
+                        "most_days_overdue": max(d["days_overdue"] for d in doses)})
+    return sorted(out, key=lambda c: -c["most_days_overdue"])
+
+
+# ---- Full check report (every question and answer), for the CHW only ----
+#
+# GET  /chw/cases/{id}/report        the report as data, for the app and website screens
+# POST /chw/cases/{id}/report-link   a link to the PDF that works for REPORT_MINUTES,
+#                                    so the phone's browser can open it without the
+#                                    sign-in token (the link is tied to this CHW and check)
+# GET  /chw/report.pdf?token=...     the PDF
+
+REPORT = "check_report"
+REPORT_MINUTES = 10
+
+
+def _linked_check(db: Session, prediction_id: uuid.UUID, chw: User):
+    """(pred, input, child, caregiver) for a check of a caregiver linked to this CHW."""
+    row = db.execute(select(PredictionResult, CaregiverInput, Child, User)
+                     .join(CaregiverInput, PredictionResult.input_id == CaregiverInput.input_id)
+                     .join(Child, CaregiverInput.child_id == Child.child_id)
+                     .join(User, Child.caregiver_id == User.user_id)
+                     .where(PredictionResult.prediction_id == prediction_id)).first()
+    if row is None or row[3].linked_chw_id != chw.user_id:
+        raise HTTPException(404, "check not found")  # same answer for someone else's check
+    return row
+
+
+@router.get("/cases/{prediction_id}/report")
+def check_report(prediction_id: uuid.UUID, user: User = Depends(chw_only),
+                 db: Session = Depends(get_db)):
+    pred, inp, child, caregiver = _linked_check(db, prediction_id, user)
+    return report.build(pred, inp, child, caregiver, user.language)
+
+
+@router.post("/cases/{prediction_id}/report-link")
+def check_report_link(prediction_id: uuid.UUID, user: User = Depends(chw_only),
+                      db: Session = Depends(get_db)):
+    _linked_check(db, prediction_id, user)
+    token = create_link_token(user.user_id, REPORT, timedelta(minutes=REPORT_MINUTES),
+                              bound_to=str(prediction_id))
+    base = settings.public_base_url.rstrip("/")
+    return {"url": f"{base}/chw/report.pdf?{urlencode({'id': str(prediction_id), 'token': token})}",
+            "expires_in_minutes": REPORT_MINUTES}
+
+
+@router.get("/report.pdf", include_in_schema=False)
+def check_report_pdf(id: uuid.UUID, token: str, db: Session = Depends(get_db)):
+    try:
+        chw_id, fingerprint = read_link_token(token, REPORT)
+    except jwt.InvalidTokenError:
+        raise HTTPException(403, "this report link has expired; open the report again in Hatua")
+    chw = db.get(User, chw_id)
+    if (chw is None or not chw.is_active or chw.role != "chw"
+            or not link_still_matches(fingerprint, str(id))):
+        raise HTTPException(403, "this report link does not work")
+    pred, inp, child, caregiver = _linked_check(db, id, chw)
+    data = report.build(pred, inp, child, caregiver, chw.language)
+    pdf = report_pdf.render(data, chw.language)
+    name = f"Hatua-check-{child.first_name}-{inp.submitted_at:%Y-%m-%d}.pdf"
+    safe = "".join(ch if ch.isalnum() or ch in "-." else "-" for ch in name)
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{safe}"',
+                             "Cache-Control": "no-store"})

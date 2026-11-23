@@ -78,7 +78,7 @@ class _CheckScreenState extends State<CheckScreen> {
           savedAt: DateTime.now(),
         ));
         if (!mounted) return;
-        await _showSavedForLater();
+        await _showSavedForLater(_screeningConcerns(q));
         if (mounted) Navigator.of(context).pop();
         return;
       }
@@ -89,16 +89,55 @@ class _CheckScreenState extends State<CheckScreen> {
     }
   }
 
-  Future<void> _showSavedForLater() => showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(tr('Saved on this phone')),
-          content: Text(tr("We couldn't send {firstName}'s check right now. Your answers are saved and will be sent when you are back online. You can also send them from the home screen.", {'firstName': widget.child.firstName})),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('OK'))),
+  /// The hearing and eye questions answered "No", as kinds ("hearing", "vision"). These
+  /// are fixed rules, not the model (backend questions.py, RED_FLAGS: "No" is never the
+  /// reassuring answer), so the phone can say so at once without a connection.
+  Set<String> _screeningConcerns(Questionnaire q) => {
+        for (final question in q.questions)
+          if (question.screening != null && _answers[question.item] == 'no') question.screening!,
+      };
+
+  Future<void> _showSavedForLater(Set<String> concerns) {
+    final name = widget.child.firstName;
+    final t = Theme.of(context).textTheme;
+    final concern = concerns.isEmpty
+        ? null
+        : concerns.containsAll({'hearing', 'vision'})
+            ? tr("Some of your answers about {name}'s hearing and eyes need a health worker to look at them.", {'name': name})
+            : concerns.contains('hearing')
+                ? tr("Some of your answers about {name}'s hearing need a health worker to look at them.", {'name': name})
+                : tr("Some of your answers about {name}'s eyes need a health worker to look at them.", {'name': name});
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('Saved on this phone')),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (concern != null) ...[
+            Container(
+              padding: const EdgeInsets.all(Space.s3),
+              decoration: BoxDecoration(
+                  color: context.hc.sun100, borderRadius: BorderRadius.circular(Radii.md)),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.visibility_outlined, color: context.hc.plum900),
+                const SizedBox(width: Space.s2),
+                Expanded(
+                  child: Text(
+                    '$concern ${tr('Please visit a health facility or show {name} to your community health worker soon. You do not need to wait for the result.', {'name': name})}',
+                    style: t.bodyMedium?.copyWith(color: context.hc.plum900),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: Space.s3),
           ],
-        ),
-      );
+          Text(tr("We couldn't send {firstName}'s check right now. Your answers are saved and will be sent when you are back online. You can also send them from the home screen.", {'firstName': name})),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('OK'))),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

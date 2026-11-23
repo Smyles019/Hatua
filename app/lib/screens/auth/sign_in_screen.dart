@@ -64,10 +64,10 @@ class _SignInScreenState extends State<SignInScreen> {
       final google = await GoogleAuth.pickAccount();
       try {
         await session.signInWithGoogle(google.idToken);
-      } on NeedsPhone {
+      } on NeedsPhone catch (e) {
         if (mounted) {
           await Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => AddPhoneScreen(google: google)));
+              .push(MaterialPageRoute(builder: (_) => AddPhoneScreen(google: google, role: e.role)));
         }
       }
     } on GoogleSignInCancelled {

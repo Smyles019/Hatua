@@ -1,16 +1,17 @@
-"""Ask a CHW: a message thread between a caregiver and their community health worker.
+"""The chat between a caregiver and their community health worker.
 
-Not live chat. The caregiver writes a question; the CHW linked to them replies when they
-can; either side can follow up. There is one thread per caregiver. A question asked
-before a CHW is linked waits in the thread and reaches the CHW once the link is made.
-The app shows the danger signs before a question is sent: this is not for emergencies.
+Either side can write first and keep writing; the CHW answers when they can, so it is
+not for emergencies (the app shows the danger signs before a caregiver's first message
+in a visit, and the website keeps them beside the chat). There is one thread per
+caregiver. Messages written before a CHW is linked wait in the thread and reach the CHW
+once the link is made.
 
     caregiver  GET /messages, POST /messages
     chw        GET /messages/threads, GET and POST /messages/threads/{caregiver_id}
 """
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from app.api.deps import require
 from app.db.models import CaregiverInput, Child, Message, PredictionResult, User
 from app.db.session import get_db
 from app.schemas.assessment import MessageIn
+from app.services import notify
 
 router = APIRouter()
 caregiver_only = require("caregiver")
@@ -71,9 +73,10 @@ def my_thread(user: User = Depends(caregiver_only), db: Session = Depends(get_db
 
 
 @router.post("", status_code=201)
-def ask(body: MessageIn, user: User = Depends(caregiver_only), db: Session = Depends(get_db)):
+def ask(body: MessageIn, bg: BackgroundTasks, user: User = Depends(caregiver_only),
+        db: Session = Depends(get_db)):
     if not body.body.strip():
-        raise HTTPException(422, "write your question first")
+        raise HTTPException(422, "write a message first")
     if body.prediction_id is not None:
         owner = db.scalar(
             select(Child.caregiver_id)
@@ -83,6 +86,7 @@ def ask(body: MessageIn, user: User = Depends(caregiver_only), db: Session = Dep
         if owner != user.user_id:
             raise HTTPException(404, "check not found")
     _add(db, user, user, body.body, body.prediction_id)
+    notify.new_question(bg, db, user)
     return _thread(db, user, user)
 
 
@@ -132,10 +136,11 @@ def thread(caregiver_id: uuid.UUID, user: User = Depends(chw_only),
 
 
 @router.post("/threads/{caregiver_id}", status_code=201)
-def reply(caregiver_id: uuid.UUID, body: MessageIn, user: User = Depends(chw_only),
-          db: Session = Depends(get_db)):
+def reply(caregiver_id: uuid.UUID, body: MessageIn, bg: BackgroundTasks,
+          user: User = Depends(chw_only), db: Session = Depends(get_db)):
     caregiver = _linked(db, caregiver_id, user)
     if not body.body.strip():
-        raise HTTPException(422, "write your reply first")
+        raise HTTPException(422, "write a message first")
     _add(db, caregiver, user, body.body)
+    notify.chw_replied(bg, caregiver)
     return _thread(db, caregiver, user)

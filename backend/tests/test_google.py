@@ -24,7 +24,7 @@ def test_new_google_account_asks_for_a_phone_number_first(client, google):
     r = client.post("/auth/google", json={"id_token": TOKEN})
     assert r.status_code == 428
     assert r.json()["detail"] == {"needs_phone": True, "full_name": "Amina Wanjiku",
-                                  "email": google.email}
+                                  "email": google.email, "role": "caregiver"}
 
 
 def test_new_google_account_with_phone_becomes_a_caregiver(client, google):

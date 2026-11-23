@@ -1,4 +1,4 @@
-"""Sends the two emails Hatua needs: verify your email, and reset your password.
+"""Sends Hatua's emails: verify your email, reset your password, and a CHW's invite.
 
 With SMTP_HOST set, messages go out over SMTP (STARTTLS). Without it nothing is sent:
 the message is logged and kept in `outbox`, so links can be read from the server log
@@ -61,3 +61,17 @@ def send_password_reset(to: str, name: str, link: str) -> None:
          f"Open this link to choose a new password:\n\n{link}\n\n"
          f"The link works for {settings.reset_link_minutes} minutes and only once. If you "
          "did not ask for this, you can ignore this message; your password stays the same.\n")
+
+
+def send_chw_invite(to: str, name: str, link: str, site: str) -> None:
+    send(to, "You are invited to Hatua as a community health worker",
+         f"Hello {name},\n\n"
+         "An administrator has added you to Hatua as a community health worker. Hatua "
+         "helps caregivers check how their young children are developing, and sends the "
+         "checks that need a look to their health worker.\n\n"
+         "Open this link to set up your account. You will choose a password and add your "
+         f"phone number:\n\n{link}\n\n"
+         f"Or sign in with Google at {site} using this email address ({to}).\n\n"
+         f"The link works for {settings.invite_link_days} days. If it runs out, ask your "
+         "administrator to send a new one. If you did not expect this, you can ignore "
+         "this message.\n")

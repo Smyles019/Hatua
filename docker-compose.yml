@@ -34,7 +34,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://hatua:hatua_dev_password@db:5432/hatua
       MODEL_DIR: /srv/ml/artefacts
-      MODEL_RELEASE: ${MODEL_RELEASE:-1.0.0}
+      MODEL_RELEASE: ${MODEL_RELEASE:-1.1.0}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ random characters) in your shell or a root .env}
       DEV_MODE: "false"
     volumes:

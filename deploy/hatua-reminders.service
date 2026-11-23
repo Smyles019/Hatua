@@ -1,0 +1,13 @@
+# "Time for a check" push reminders (backend/app/services/notify.py).
+# Installed with deploy/hatua-reminders.timer, which runs it once a day:
+#   sudo cp deploy/hatua-reminders.* /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hatua-reminders.timer
+# Check the last run: journalctl -u hatua-reminders.service -n 20
+[Unit]
+Description=Hatua: send check reminders
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -w /srv/backend hatua-api python -m app.cli send-reminders

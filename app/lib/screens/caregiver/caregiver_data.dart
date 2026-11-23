@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 
@@ -12,7 +14,17 @@ class ChildWithChecks {
 
 Future<List<Child>> loadChildren(ApiClient api) async {
   final data = await api.get('/children') as List;
-  return data.map((c) => Child.fromJson(c as Map<String, dynamic>)).toList();
+  final children = data.map((c) => Child.fromJson(c as Map<String, dynamic>)).toList();
+  // While online, fetch each child's check questions too, so the phone keeps a copy
+  // and a check can be started later with no signal.
+  if (api.savedDataFrom.value == null) {
+    for (final c in children) {
+      unawaited(api
+          .get('/assessments/questions', {'child_id': c.childId})
+          .then<void>((_) {}, onError: (_) {}));
+    }
+  }
+  return children;
 }
 
 Future<List<Assessment>> loadChecks(ApiClient api, String childId) async {

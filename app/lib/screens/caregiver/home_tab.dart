@@ -13,6 +13,7 @@ import '../messages/thread_screen.dart';
 import 'add_child_screen.dart';
 import 'care_schedule.dart';
 import 'caregiver_data.dart';
+import 'health_record_screen.dart';
 import 'caregiver_shell.dart';
 import 'child_profile_screen.dart';
 import 'play_ideas.dart';
@@ -188,8 +189,8 @@ class _CaregiverHomeTabState extends State<CaregiverHomeTab> {
           _Tool(
             icon: Icons.chat_bubble_outline_rounded,
             color: context.hc.plum100,
-            title: tr('Ask a health worker'),
-            subtitle: tr('Send a question'),
+            title: tr('Chat with your health worker'),
+            subtitle: tr('Send a message'),
             onTap: () => Navigator.of(context)
                 .push(MaterialPageRoute(builder: (_) => const ThreadScreen())),
           ),
@@ -419,10 +420,14 @@ class _CareCard extends StatelessWidget {
               ),
             ]),
           ),
-        const SizedBox(height: Space.s3),
-        Text(
-          tr('These are the usual ages. The app does not know what {firstName} has already had, so check the clinic booklet.', {'firstName': item.child.firstName}),
-          style: t.bodySmall,
+        const SizedBox(height: Space.s2),
+        // The usual ages; the health booklet screen has what was actually given.
+        TextButton.icon(
+          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => HealthRecordScreen(child: item.child))),
+          icon: const Icon(Icons.menu_book_outlined, size: 18),
+          label: Text(tr("Open {firstName}'s health booklet", {'firstName': item.child.firstName})),
         ),
       ]),
     );
@@ -454,7 +459,9 @@ class _Tool extends StatelessWidget {
           width: 40,
           height: 40,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          child: Icon(icon, color: context.hc.onBright, size: 22),
+          // The circles are pale tints in light mode and dark tints in dark mode, so the
+          // icon takes the text colour (dark, or near-white in dark mode), not onBright.
+          child: Icon(icon, color: context.hc.plum900, size: 22),
         ),
         const SizedBox(height: Space.s3),
         Text(title, style: t.labelLarge),

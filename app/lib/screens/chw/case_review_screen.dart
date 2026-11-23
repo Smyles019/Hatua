@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../api/models.dart';
+import '../../state/outbox.dart';
 import '../../state/session.dart';
 import '../../theme/colors.dart';
 import '../../theme/theme.dart';
@@ -11,6 +12,7 @@ import '../../widgets/common.dart';
 import '../../widgets/domain.dart';
 import '../../widgets/risk_chip.dart';
 import '../messages/thread_screen.dart';
+import 'check_report_screen.dart';
 import 'chw_data.dart';
 import '../../i18n/strings.dart';
 
@@ -38,13 +40,21 @@ class _CaseReviewScreenState extends State<CaseReviewScreen> {
     setState(() => _busy = true);
     final session = context.read<Session>();
     try {
-      await session.api.post('/chw/cases/${widget.assessment.predictionId}/outcome',
-          {'outcome': _outcome});
+      await session.sendOrQueue(
+          kind: 'outcome',
+          path: '/chw/cases/${widget.assessment.predictionId}/outcome',
+          body: {'outcome': _outcome},
+          label: tr('outcome for {childName}', {'childName': widget.assessment.childName}));
       session.dataChanged();
       if (mounted) {
         showMessage(context, tr('Outcome saved for {childName}.', {'childName': widget.assessment.childName}));
         Navigator.of(context).pop();
       }
+    } on SavedForLater {
+      // A home visit with no signal: the outcome goes once the phone is back online.
+      if (!mounted) return;
+      showMessage(context, tr('No connection. The outcome for {childName} is saved on this phone and will be sent when you are back online.', {'childName': widget.assessment.childName}));
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
@@ -160,6 +170,13 @@ class _CaseReviewScreenState extends State<CaseReviewScreen> {
               answers: a.answers),
           SizedBox(height: Space.s2),
         ],
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) =>
+                  CheckReportScreen(predictionId: a.predictionId, childName: a.childName))),
+          icon: Icon(Icons.description_outlined),
+          label: Text(tr('Full report: every question and answer')),
+        ),
         if (a.caregiverId != null) ...[
           SizedBox(height: Space.s2),
           OutlinedButton.icon(

@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer,
-                        MetaData, String, false, func, text, true)
+                        MetaData, String, Text, false, func, text, true)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -51,14 +51,20 @@ class User(Base):
     __table_args__ = (
         CheckConstraint(_in("role", ROLES), name="role_valid"),
         CheckConstraint(_in("language", LANGUAGES), name="language_valid"),
-        # every account has a way to sign in: a Hatua password, a Google account, or both
-        CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL",
-                        name="has_sign_in"),
+        # every account has a way to sign in: a Hatua password, a Google account, or both,
+        # or is a CHW invite still waiting to be set up (see invited_at)
+        CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL "
+                        "OR invited_at IS NOT NULL", name="has_sign_in"),
+        # only an invite still waiting may have no phone number
+        CheckConstraint("phone_number IS NOT NULL OR (invited_at IS NOT NULL AND "
+                        "password_hash IS NULL AND google_id IS NULL)",
+                        name="phone_or_invited"),
     )
 
     user_id: Mapped[uuid.UUID] = _uuid()
     full_name: Mapped[str] = mapped_column(String(100))
-    phone_number: Mapped[str] = mapped_column(String(15), unique=True)
+    # Empty only while a CHW invite is waiting: the CHW adds it when setting up.
+    phone_number: Mapped[str | None] = mapped_column(String(15), unique=True)
     password_hash: Mapped[str | None] = mapped_column(String(255))
     # People sign in with their email (and a password, or Google). The phone number is
     # a contact detail and how CHWs find a caregiver to link. Nullable only for accounts
@@ -79,7 +85,19 @@ class User(Base):
     # App language: English or Swahili. Saved on the account so it follows the person
     # from the phone to the web.
     language: Mapped[str] = mapped_column(String(2), server_default="en", default="en")
+    # CHW invites (POST /admin/chws): when the invite email was last sent. The account
+    # waits, with no password, Google account or phone number, until the CHW opens the
+    # link and sets a password, or signs in with Google using the invited email.
+    invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Push notifications: Firebase Cloud Messaging tokens of this person's phones,
+    # newest last, [{"token", "updated_at"}] (see app.core.push).
+    push_tokens: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
+                                              default=list)
     created_at: Mapped[datetime] = _now()
+
+    @property
+    def invite_pending(self) -> bool:
+        return self.password_hash is None and self.google_id is None
 
 
 class Child(Base):
@@ -107,6 +125,27 @@ class Child(Base):
     # the model.
     care_factors: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
                                                default=list)
+    # The age band ("12-17") the "time for a check" reminder was last sent for, so each
+    # band is reminded once (app.services.notify.send_check_reminders).
+    reminded_band: Mapped[str | None] = mapped_column(String(10))
+    # The child health record from the purple book (app.services.immunization).
+    # Vaccines, vitamin A and deworming given, by schedule id: {"bcg": "2026-01-03"}.
+    care_given: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"),
+                                             default=dict)
+    # County-only vaccines switched on for this child: "malaria", "yellow_fever".
+    extra_vaccines: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
+                                                 default=list)
+    # {"weight_kg", "gestation_weeks", "place"}, any of them may be missing.
+    birth: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), default=dict)
+    birth_certificate: Mapped[bool | None] = mapped_column(Boolean)
+    bed_net: Mapped[bool | None] = mapped_column(Boolean)
+    # The next visit the nurse wrote in the booklet, and the visit the "clinic tomorrow"
+    # reminder was last sent for (so it goes once).
+    next_clinic_on: Mapped[date | None] = mapped_column(Date)
+    clinic_reminded_on: Mapped[date | None] = mapped_column(Date)
+    # The caregiver's notes of sick visits: [{"visit_id", "visit_on", "illness", "treatment"}].
+    sick_visits: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"),
+                                              default=list)
     created_at: Mapped[datetime] = _now()
 
 
@@ -170,6 +209,42 @@ class Message(Base):
         ForeignKey("prediction_results.prediction_id", ondelete="SET NULL"))
     body: Mapped[str] = mapped_column(String(1000))
     created_at: Mapped[datetime] = _now()
+
+
+ASSISTANT_ROLES = ("user", "assistant")
+
+
+class AssistantMessage(Base):
+    """The Hatua assistant (app.services.assistant): a caregiver's saved conversation
+    with the AI. Kept apart from Message, the CHW chat, so the two never mix."""
+    __tablename__ = "assistant_messages"
+    __table_args__ = (CheckConstraint(_in("role", ASSISTANT_ROLES), name="role_valid"),)
+
+    message_id: Mapped[uuid.UUID] = _uuid()
+    caregiver_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="CASCADE"), index=True)
+    # The child a question was about; only their age is sent to the AI.
+    child_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("children.child_id", ondelete="SET NULL"))
+    role: Mapped[str] = mapped_column(String(10))
+    body: Mapped[str] = mapped_column(Text)
+    # Answered with the fixed "go to a health facility now" reply (a danger sign).
+    flagged: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
+    created_at: Mapped[datetime] = _now()
+
+
+class IdempotentRequest(Base):
+    """A change the phone queued while offline, by the random key the phone gave it, with
+    the answer it got. Sending the same key again returns this answer (app.core.idempotency)."""
+    __tablename__ = "idempotent_requests"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    path: Mapped[str] = mapped_column(String(200))
+    status_code: Mapped[int] = mapped_column(Integer)
+    body: Mapped[str] = mapped_column(Text)
+    # Indexed for the daily clean-up of old keys.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
 class MilestoneSummary(Base):

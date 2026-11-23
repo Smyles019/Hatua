@@ -32,22 +32,52 @@ class ChildCreate(BaseModel):
 
 
 class GrowthEntry(BaseModel):
-    """One weight and height entry, usually copied from the clinic booklet."""
+    """One weight, height and arm (MUAC) entry, usually copied from the clinic booklet."""
     measured_on: date
     weight_kg: float | None = Field(default=None, ge=1, le=35)
     height_cm: float | None = Field(default=None, ge=40, le=130)
+    # Mid-upper arm circumference, from the coloured tape; used from 6 months.
+    muac_cm: float | None = Field(default=None, ge=8, le=25)
 
     @model_validator(mode="after")
     def _one_measure(self):
-        if self.weight_kg is None and self.height_cm is None:
-            raise ValueError("give a weight, a height or both")
+        if self.weight_kg is None and self.height_cm is None and self.muac_cm is None:
+            raise ValueError("give a weight, a height or an arm measurement")
         return self
 
 
+BirthPlace = Literal["facility", "home", "on_the_way"]
+ExtraVaccine = Literal["malaria", "yellow_fever"]
+
+
+class BirthDetails(BaseModel):
+    """From the birth page of the booklet. Any field may be left out."""
+    weight_kg: float | None = Field(default=None, ge=0.4, le=6.5)
+    gestation_weeks: int | None = Field(default=None, ge=22, le=44)
+    place: BirthPlace | None = None
+
+
 class ChildUpdate(BaseModel):
-    """Only the fields that are sent are changed."""
+    """Only the fields that are sent are changed. For the yes/no fields and the clinic
+    date, sending null clears them (see update_child)."""
     avatar_id: Avatar | None = None
     care_factors: list[CareFactor] | None = None
+    birth: BirthDetails | None = None
+    birth_certificate: bool | None = None
+    bed_net: bool | None = None
+    next_clinic_on: date | None = None
+    extra_vaccines: list[ExtraVaccine] | None = None
+
+
+class GivenIn(BaseModel):
+    """A vaccine, vitamin A or deworming dose ticked as given."""
+    given_on: date
+
+
+class SickVisitIn(BaseModel):
+    visit_on: date
+    illness: str = Field(min_length=1, max_length=200)
+    treatment: str | None = Field(default=None, max_length=300)
 
 
 class ChildOut(BaseModel):
@@ -62,6 +92,12 @@ class ChildOut(BaseModel):
     avatar_id: Avatar | None = None
     growth: list[GrowthEntry] = []
     care_factors: list[CareFactor] = []
+    birth: BirthDetails = BirthDetails()
+    birth_certificate: bool | None = None
+    bed_net: bool | None = None
+    next_clinic_on: date | None = None
+    extra_vaccines: list[ExtraVaccine] = []
+    sick_visits: list[dict] = []
 
 
 class AssessmentIn(BaseModel):

@@ -10,11 +10,16 @@ import '../../widgets/google_button.dart';
 import '../../widgets/sprout.dart';
 import '../../i18n/strings.dart';
 
-/// Shown once, after the first Google sign-in. The account is created only when the
-/// phone number is added: CHWs find and link caregivers by phone.
+/// Shown once, after the first Google sign-in. A caregiver's account is created only
+/// when the phone number is added (CHWs find and link caregivers by phone). A CHW
+/// invited by an administrator also comes here: their invite has no phone yet.
 class AddPhoneScreen extends StatefulWidget {
-  const AddPhoneScreen({super.key, required this.google});
+  const AddPhoneScreen({super.key, required this.google, this.role = 'caregiver'});
   final GoogleIdToken google;
+
+  /// 'caregiver' or 'chw' (an invited CHW finishing their account).
+  final String role;
+  bool get chw => role == 'chw';
 
   @override
   State<AddPhoneScreen> createState() => _AddPhoneScreenState();
@@ -59,8 +64,12 @@ class _AddPhoneScreenState extends State<AddPhoneScreen> {
           const SizedBox(height: Space.s3),
           Text(tr('One more step'), style: t.headlineSmall, textAlign: TextAlign.center),
           const SizedBox(height: Space.s1),
-          Text(tr('Add your phone number so your community health worker can link to you.'),
-              style: t.bodyMedium, textAlign: TextAlign.center),
+          Text(
+              widget.chw
+                  ? tr('You were invited as a community health worker. Add your phone number to finish setting up your account.')
+                  : tr('Add your phone number so your community health worker can link to you.'),
+              style: t.bodyMedium,
+              textAlign: TextAlign.center),
           const SizedBox(height: Space.s6),
           Text(tr('GOOGLE ACCOUNT'), style: t.labelMedium),
           const SizedBox(height: Space.s1),
@@ -90,11 +99,15 @@ class _AddPhoneScreenState extends State<AddPhoneScreen> {
           const SizedBox(height: Space.s6),
           FilledButton(
             onPressed: _busy ? null : _submit,
-            child: Text(_busy ? tr('Creating your account...') : tr('Continue')),
+            child: Text(_busy
+                ? (widget.chw ? tr('Setting up your account...') : tr('Creating your account...'))
+                : tr('Continue')),
           ),
           const SizedBox(height: Space.s3),
           Text(
-            tr('Already have a Hatua account with this number? Go back and sign in with your phone number and password.'),
+            widget.chw
+                ? tr('This number must not belong to another Hatua account. Use the phone you work with, so caregivers and the administrator can reach you.')
+                : tr('Already have a Hatua account with this number? Go back and sign in with your email and password.'),
             style: t.bodySmall,
             textAlign: TextAlign.center,
           ),

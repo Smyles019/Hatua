@@ -38,6 +38,16 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
     verify_link_hours: int = 48
     reset_link_minutes: int = 60
+    invite_link_days: int = 7  # CHW invites; the administrator can send a new one
+    # Push notifications (Firebase Cloud Messaging): path to the Firebase service account
+    # key (JSON). Empty: nothing is sent; notifications are logged and kept in
+    # app.core.push.outbox instead, as emails are without SMTP.
+    firebase_credentials: str = ""
+    # The Hatua assistant (app.services.assistant). Empty key: the assistant is off and
+    # its screen says so. The model can be changed without code changes.
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    assistant_daily_limit: int = 30  # messages per caregiver per day, to protect credit
 
     @property
     def google_audiences(self) -> list[str]:

@@ -67,10 +67,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       try {
         await session.signInWithGoogle(google.idToken);
         if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
-      } on NeedsPhone {
+      } on NeedsPhone catch (e) {
         if (mounted) {
           await Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => AddPhoneScreen(google: google)));
+              .push(MaterialPageRoute(builder: (_) => AddPhoneScreen(google: google, role: e.role)));
         }
       }
     } on GoogleSignInCancelled {

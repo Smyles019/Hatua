@@ -1,11 +1,20 @@
-# Keep survey data, environments and artefacts out of the image build context.
+# Keep survey data, environments, secrets and unused artefacts out of the build context.
 data/
 **/.venv/
 **/__pycache__/
 **/.pytest_cache/
-ml/artefacts/
 ml/notebooks/
 app/
 docs/
-backend/.env
+_backup/
 .git/
+.env
+.env.prod
+backend/.env
+
+# Models: only what the image needs (see backend/Dockerfile)
+ml/artefacts/*
+!ml/artefacts/release
+!ml/artefacts/xgboost_under2
+ml/artefacts/xgboost_under2/*
+!ml/artefacts/xgboost_under2/short_30

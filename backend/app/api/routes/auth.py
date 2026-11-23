@@ -6,11 +6,15 @@ link is sent) before the first sign-in. CHW and administrator accounts are creat
 an administrator (/admin/users); the first administrator is created from the command
 line (python -m app.cli create-admin).
 
+CHWs are usually invited instead (/admin/chws): the administrator gives a name and an
+email, and the CHW opens the emailed link to choose a password and add a phone number
+(/auth/invite), or signs in with Google using that email.
+
 The phone number is not a way to sign in. It is kept as a contact detail and is how a
 CHW finds a caregiver to link.
 """
 import html
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import APIRouter, Depends, Form, HTTPException, status
@@ -24,18 +28,19 @@ from app.api.deps import current_user
 from app.core import mailer
 from app.core.config import settings
 from app.core.google import GoogleTokenError, verify_google_token
+from app.core.push import add_token
 from app.core.security import (create_access_token, create_link_token, hash_password,
                                link_still_matches, read_link_token, verify_password)
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.users import (EmailOnly, GoogleSignIn, Login, PasswordChange, Preferences,
-                               Register, Registered, Session as SessionOut, UserOut,
-                               email_address)
+                               PushToken, Register, Registered, Session as SessionOut,
+                               UserOut, email_address, kenyan_phone)
 
 router = APIRouter()
 
 BAD_LOGIN = HTTPException(status.HTTP_401_UNAUTHORIZED, "wrong email or password")
-VERIFY, RESET = "verify_email", "reset_password"
+VERIFY, RESET, INVITE = "verify_email", "reset_password", "chw_invite"
 
 
 def session_for(user: User) -> dict:
@@ -85,6 +90,24 @@ def send_verification(user: User) -> None:
                              f"{settings.public_base_url}/auth/verify?token={token}")
 
 
+def _invite_fingerprint(user: User) -> str:
+    # A link stops working once the account is set up (password or Google added) and
+    # when a newer invite is sent (invited_at changes), so only the latest link works.
+    stamp = user.invited_at.isoformat() if user.invited_at else ""
+    return f"{user.password_hash or ''}|{user.google_id or ''}|{stamp}"
+
+
+def send_invite(db: Session, user: User) -> None:
+    """Emails a CHW the link to set up their invited account."""
+    user.invited_at = datetime.now(timezone.utc)
+    db.commit()
+    token = create_link_token(user.user_id, INVITE, timedelta(days=settings.invite_link_days),
+                              _invite_fingerprint(user))
+    mailer.send_chw_invite(user.email, user.full_name,
+                           f"{settings.public_base_url}/auth/invite?token={token}",
+                           settings.public_base_url)
+
+
 @router.post("/register", response_model=Registered, status_code=201)
 def register(body: Register, db: Session = Depends(get_db)):
     """Creates the caregiver account and emails a confirmation link. There is no session
@@ -99,7 +122,9 @@ def register(body: Register, db: Session = Depends(get_db)):
 def resend_verification(body: EmailOnly, db: Session = Depends(get_db)):
     """Always 204, whether or not the email has an account waiting to be confirmed."""
     user = db.scalar(select(User).where(User.email == body.email))
-    if user is not None and user.is_active and not user.email_verified:
+    if user is not None and user.is_active and user.invite_pending:
+        send_invite(db, user)  # a CHW who has not set up yet needs the invite, not this
+    elif user is not None and user.is_active and not user.email_verified:
         send_verification(user)
 
 
@@ -113,13 +138,23 @@ def forgot_password(body: EmailOnly, db: Session = Depends(get_db)):
     """Emails a link to choose a new password. Always 204, so this cannot be used to
     find out which emails have accounts."""
     user = db.scalar(select(User).where(User.email == body.email))
-    if user is not None and user.is_active:
+    if user is not None and user.is_active and user.invite_pending:
+        # An invited CHW also has to add a phone number, which the invite page asks for.
+        send_invite(db, user)
+    elif user is not None and user.is_active:
         token = create_link_token(user.user_id, RESET,
                                   timedelta(minutes=settings.reset_link_minutes),
                                   user.password_hash)
         mailer.send_password_reset(
             user.email, user.full_name,
             f"{settings.public_base_url}/auth/password/reset?token={token}")
+
+
+def _phone_free(db: Session, phone_number: str) -> None:
+    if db.scalar(select(User).where(User.phone_number == phone_number)) is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "this phone number already has an account; sign in with the "
+                            "email and password of that account")
 
 
 @router.post("/google", response_model=SessionOut)
@@ -130,7 +165,8 @@ def google_sign_in(body: GoogleSignIn, db: Session = Depends(get_db)):
     two are joined and the person is signed in to that account (Google has verified the
     address, so they own it). New email: needs phone_number, then creates a caregiver
     account. Without it the answer is 428 with the name and email from Google, so the
-    app can show its "Add your phone number" step and call again.
+    app can show its "Add your phone number" step and call again. An invited CHW who
+    has not set up yet goes through the same phone step (their invite has no phone).
 
     A phone number that already has a Hatua account is refused rather than taken over:
     nothing here proves the person owns that number.
@@ -154,6 +190,15 @@ def google_sign_in(body: GoogleSignIn, db: Session = Depends(get_db)):
         if user.google_id is not None:
             raise HTTPException(status.HTTP_409_CONFLICT,
                                 "this email is already used by another Google account")
+        if user.phone_number is None:
+            # An invited CHW setting up with Google: the same one-time phone step as a
+            # new account, then the invite is taken up.
+            if body.phone_number is None:
+                raise HTTPException(status.HTTP_428_PRECONDITION_REQUIRED,
+                                    {"needs_phone": True, "full_name": user.full_name,
+                                     "email": user.email, "role": user.role})
+            _phone_free(db, body.phone_number)
+            user.phone_number = body.phone_number
         if not user.email_verified:
             # Someone registered this address but never confirmed it, so the password
             # may not be the owner's. The owner (proved by Google) takes the account.
@@ -164,11 +209,9 @@ def google_sign_in(body: GoogleSignIn, db: Session = Depends(get_db)):
 
     if body.phone_number is None:
         raise HTTPException(status.HTTP_428_PRECONDITION_REQUIRED,
-                            {"needs_phone": True, "full_name": who.name, "email": who.email})
-    if db.scalar(select(User).where(User.phone_number == body.phone_number)) is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT,
-                            "this phone number already has an account; sign in with the "
-                            "email and password of that account")
+                            {"needs_phone": True, "full_name": who.name, "email": who.email,
+                             "role": "caregiver"})
+    _phone_free(db, body.phone_number)
 
     user = User(full_name=who.name[:100], phone_number=body.phone_number, password_hash=None,
                 email=who.email, email_verified=True, google_id=who.google_id,
@@ -213,6 +256,30 @@ def update_me(body: Preferences, user: User = Depends(current_user),
     user.language = body.language
     db.commit()
     return user
+
+
+@router.put("/me/push-token", status_code=204)
+def register_push_token(body: PushToken, user: User = Depends(current_user),
+                        db: Session = Depends(get_db)):
+    """The app sends its notification token after sign-in and whenever it changes.
+
+    A phone belongs to whoever signed in on it last: the token is taken off any other
+    account first, so a shared phone never shows someone else's notifications."""
+    for other in db.scalars(select(User).where(
+            User.user_id != user.user_id,
+            User.push_tokens.contains([{"token": body.token}]))):
+        other.push_tokens = [t for t in other.push_tokens if t.get("token") != body.token]
+    user.push_tokens = add_token(user.push_tokens or [], body.token)
+    db.commit()
+
+
+@router.delete("/me/push-token", status_code=204)
+def remove_push_token(token: str, user: User = Depends(current_user),
+                      db: Session = Depends(get_db)):
+    """The app calls this on sign-out, so the phone stops getting this person's
+    notifications."""
+    user.push_tokens = [t for t in (user.push_tokens or []) if t.get("token") != token]
+    db.commit()
 
 
 @router.put("/password", status_code=204)
@@ -329,3 +396,89 @@ def reset_password(token: str = Form(""), new_password: str = Form(""),
     return _page("Your password is changed",
                  "<p>Go back to the Hatua app and sign in with your email and your new "
                  "password.</p>")
+
+
+# ---- CHW invite: set up the account from the emailed link ----
+
+def _invite_form(token: str, user: User, error: str = "", phone: str = "") -> str:
+    err = f'<p class="err">{html.escape(error)}</p>' if error else ""
+    return (f'<p>Welcome, {html.escape(user.full_name)}. You are joining Hatua as a '
+            f'community health worker. You will sign in with '
+            f'<b>{html.escape(user.email or "")}</b>.</p>{err}'
+            '<form method="post" action="/auth/invite">'
+            f'<input type="hidden" name="token" value="{html.escape(token)}">'
+            '<label for="ph">Your phone number</label>'
+            f'<input id="ph" name="phone_number" type="tel" required value="{html.escape(phone)}" '
+            'placeholder="0712 345 678" autocomplete="tel">'
+            '<label for="p1">Choose a password</label>'
+            '<input id="p1" name="new_password" type="password" minlength="6" '
+            'maxlength="128" required autocomplete="new-password">'
+            '<label for="p2">Repeat the password</label>'
+            '<input id="p2" name="repeat_password" type="password" minlength="6" '
+            'maxlength="128" required autocomplete="new-password">'
+            '<label class="show"><input type="checkbox" onchange="for (const i of '
+            'document.querySelectorAll(\'#p1,#p2\')) i.type = this.checked ? \'text\' : '
+            '\'password\'"> Show the passwords</label>'
+            '<button type="submit">Set up my account</button></form>'
+            f'<p>Or <a href="{html.escape(settings.public_base_url)}/">sign in with Google</a> '
+            'using this email address instead.</p>')
+
+
+_BAD_INVITE = ("This invite does not work",
+               "<p>The link is old, a newer invite was sent, or the account is already set "
+               "up. If you set it up already, sign in. Otherwise ask your administrator to "
+               "send a new invite.</p>")
+
+
+def _user_from_invite(db: Session, token: str) -> User | None:
+    user, fingerprint = _user_from_link(db, token, INVITE)
+    if (user is None or not user.invite_pending
+            or not link_still_matches(fingerprint, _invite_fingerprint(user))):
+        return None
+    return user
+
+
+@router.get("/invite", response_class=HTMLResponse, include_in_schema=False)
+def invite_page(token: str = "", db: Session = Depends(get_db)):
+    user = _user_from_invite(db, token)
+    if user is None:
+        return _page(*_BAD_INVITE, 400)
+    return _page("Set up your Hatua account", _invite_form(token, user))
+
+
+@router.post("/invite", response_class=HTMLResponse, include_in_schema=False)
+def accept_invite(token: str = Form(""), phone_number: str = Form(""),
+                  new_password: str = Form(""), repeat_password: str = Form(""),
+                  db: Session = Depends(get_db)):
+    user = _user_from_invite(db, token)
+    if user is None:
+        return _page(*_BAD_INVITE, 400)
+    title = "Set up your Hatua account"
+
+    def again(error: str) -> HTMLResponse:
+        return _page(title, _invite_form(token, user, error, phone_number), 400)
+
+    try:
+        phone = kenyan_phone(phone_number)
+    except ValueError as e:
+        msg = str(e)
+        return again(msg[:1].upper() + msg[1:] + ".")
+    if db.scalar(select(User).where(User.phone_number == phone)) is not None:
+        return again("This phone number already has a Hatua account. Use another number, "
+                     "or ask your administrator for help.")
+    if not 6 <= len(new_password) <= 128:
+        return again("Use at least 6 characters for the password.")
+    if new_password != repeat_password:
+        return again("The two passwords do not match.")
+    user.phone_number = phone
+    user.password_hash = hash_password(new_password)
+    user.email_verified = True  # the link came to this address
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return again("This phone number already has a Hatua account.")
+    site = html.escape(settings.public_base_url)
+    return _page("Your account is ready",
+                 f"<p>Sign in with {html.escape(user.email or '')} and your new password, "
+                 f'on the website at <a href="{site}/">{site}</a> or in the Hatua app.</p>')

@@ -68,13 +68,19 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     user_id: uuid.UUID
     full_name: str
-    phone_number: str
+    phone_number: str | None  # empty only for a CHW invite still waiting (invite_pending)
     role: Role
     linked_chw_id: uuid.UUID | None
     is_active: bool
     email: str | None = None
     email_verified: bool = False
     language: Language = "en"
+    invite_pending: bool = False
+
+
+class PushToken(BaseModel):
+    """A phone's Firebase Cloud Messaging registration token."""
+    token: str = Field(min_length=20, max_length=4096)
 
 
 class Preferences(BaseModel):
@@ -95,6 +101,21 @@ class NewUser(BaseModel):
     phone_number: Phone
     password: Password  # temporary password, handed to the person to change later
     role: Role = "caregiver"
+
+
+class NewChw(BaseModel):
+    """CHW added by an administrator: name and email only. The CHW gets an emailed link
+    to choose a password and add their phone number, or signs in with Google using this
+    email."""
+    full_name: Name
+    email: Email
+
+
+class ChwOut(UserOut):
+    """A CHW on the administrator's CHWs page."""
+    invited_at: datetime | None = None
+    created_at: datetime
+    caregivers: int = 0  # active caregivers linked to this CHW
 
 
 class EnrolCaregiver(BaseModel):
@@ -133,4 +154,6 @@ class UsageSummary(BaseModel):
     red_flags: int = 0
     outcomes: dict[str, int]
     awaiting_review: int
+    # Vaccine records of children under five (app.api.routes.admin._immunization).
+    immunization: dict[str, int] = {}
     generated_at: datetime
