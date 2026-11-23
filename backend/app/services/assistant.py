@@ -9,7 +9,9 @@ Safety, in order:
    health facility now. OpenAI is not called, so this answer cannot go wrong.
 2. Instructions to the model (SYSTEM): development, play, how Hatua works and general
    care only; never a diagnosis, never a medicine, dose or treatment; anything serious
-   or lasting goes to a health worker; short, plain answers in the caregiver's language.
+   or lasting goes to a health worker; short, plain answers in the caregiver's language
+   (the account's language, or the language a message is clearly written in), with
+   Swahili in the same words the app uses.
 3. What leaves the server: the conversation text, with phone numbers and email addresses
    removed (redact), and, if a child is chosen, their age in months. Never the child's
    or caregiver's name from the account, results or the account.
@@ -80,7 +82,41 @@ Rules you must always follow:
 - For anything not about children's development, care or health, or about Hatua, say kindly that you can only help with those.
 - Keep answers short (under 120 words), warm and in plain words. Use at most 4 short points.
 - Write plain text only: no markdown, no asterisks, no bold, no headings. For points, start each line with a dash.
-- Answer in {language}."""
+- Answer in {language}. If the caregiver's latest message is clearly written in the other language (English or Swahili), answer in that language instead. For a mix of the two, or Sheng, answer in {language}.
+
+When you write in Swahili:
+- Use standard Swahili (Kiswahili sanifu) in simple, everyday words a mother in Kenya would use. Avoid rare or very formal words, and do not mix in English unless the caregiver did.
+- Use the same words as the Hatua app: check = ukaguzi; the four areas = mwendo, lugha, kufikiri na kujifunza, kijamii na kihisia; growth = ukuaji; community health worker = mhudumu wa afya ya jamii (or mhudumu wako wa afya); health facility = kituo cha afya; clinic = kliniki; clinic booklet = kitabu cha kliniki; vaccine = chanjo; milestones = hatua za ukuaji; the assistant = Msaidizi wa Hatua.
+- Say that a result is uchunguzi, si utambuzi wa ugonjwa (screening, not a diagnosis)."""
+
+
+# Common little words, to tell which language a message is written in. A caregiver may
+# write in Swahili with the app set to English, or the other way round; the fixed urgent
+# reply then follows the message, and the model is told to do the same.
+SW_WORDS = {
+    "na", "ya", "wa", "za", "la", "kwa", "ni", "si", "je", "nini", "gani", "vipi", "mbona",
+    "sana", "lakini", "au", "kama", "hii", "huyu", "yangu", "wangu", "mwanangu", "mtoto",
+    "watoto", "ana", "hana", "anaweza", "hawezi", "bado", "miezi", "mwaka", "miaka", "kuna",
+    "nifanye", "naweza", "sijui", "tafadhali", "asante", "kila", "siku", "leo", "jana",
+}
+EN_WORDS = {
+    "the", "is", "my", "he", "she", "it", "and", "can", "how", "what", "why", "when", "does",
+    "do", "not", "baby", "child", "son", "daughter", "old", "months", "year", "should", "help",
+    "i", "a", "to", "of", "with", "has", "have", "yet", "much",
+}
+
+
+def message_language(text: str, default: str) -> str:
+    """"sw" or "en" when the message is clearly in that language; otherwise default (the
+    account's language), which also covers short or mixed messages and Sheng."""
+    words = re.findall(r"[a-z']+", text.lower())
+    sw = sum(w in SW_WORDS for w in words)
+    en = sum(w in EN_WORDS for w in words)
+    if sw >= 2 and sw > 2 * en:
+        return "sw"
+    if en >= 2 and en > 2 * sw:
+        return "en"
+    return default
 
 
 def mentions_danger_sign(text: str) -> bool:
@@ -173,7 +209,9 @@ def ask(history: list[tuple[str, str]], question: str, lang: str,
     if via_openrouter:
         headers["X-Title"] = "Hatua"
     # OpenRouter takes max_tokens; OpenAI's newer models only max_completion_tokens.
-    limit = {"max_tokens" if via_openrouter else "max_completion_tokens": 400}
+    # Swahili takes about 1.5 to 2 times as many tokens as English for the same answer,
+    # so the cap leaves room for a full 120-word Swahili reply.
+    limit = {"max_tokens" if via_openrouter else "max_completion_tokens": 600}
     payload = {"model": model, "messages": messages, **limit}
     try:
         try:

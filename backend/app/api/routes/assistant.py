@@ -63,8 +63,9 @@ def ask(body: AssistantIn, user: User = Depends(caregiver_only), db: Session = D
     child_age = age_in_months(child.date_of_birth) if child else None
     flagged = assistant.needs_urgent_reply(question, child_age)
     if flagged:
-        # Fixed reply, no AI: works even when the assistant is switched off.
-        reply = assistant.urgent_reply(user.language)
+        # Fixed reply, no AI: works even when the assistant is switched off. In the
+        # language the message is written in, so a Swahili question gets Swahili.
+        reply = assistant.urgent_reply(assistant.message_language(question, user.language))
     else:
         history = [(m.role, m.body) for m in db.scalars(
             select(AssistantMessage).where(AssistantMessage.caregiver_id == user.user_id)

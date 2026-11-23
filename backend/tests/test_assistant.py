@@ -104,8 +104,9 @@ def test_answers_and_keeps_the_conversation(client, openai):
 
 def test_danger_signs_get_the_fixed_reply_without_the_ai(client, openai):
     _, cg = register_caregiver(client)
+    # (a Swahili danger sign gets the Swahili reply: see the language test below)
     for text in ("She is having fits since morning", "my baby has fast breathing",
-                 "Mtoto ana degedege", "there is blood in the stool", "he won't wake up"):
+                 "there is blood in the stool", "he won't wake up"):
         s = client.post("/assistant", headers=cg, json={"body": text}).json()
         reply = s["messages"][-1]
         assert reply["flagged"] and "health facility now" in reply["body"], text
@@ -142,6 +143,21 @@ def test_swahili_caregiver_gets_swahili(client, openai):
     assert "Answer in Swahili" in openai.sent[0]["messages"][0]["content"]
     urgent = client.post("/assistant", headers=cg, json={"body": "ana degedege"}).json()
     assert urgent["messages"][-1]["body"] != assistant.URGENT  # translated
+    system = openai.sent[0]["messages"][0]["content"]
+    assert "Kiswahili sanifu" in system and "mhudumu wa afya ya jamii" in system
+
+
+def test_the_reply_follows_the_language_the_message_is_written_in(client, openai):
+    _, cg = register_caregiver(client)  # account in English
+    s = client.post("/assistant", headers=cg,
+                    json={"body": "Mtoto wangu ana degedege tangu asubuhi"}).json()
+    assert s["messages"][-1]["body"] != assistant.URGENT  # Swahili, though the app is English
+    s = client.post("/assistant", headers=cg, json={"body": "My baby has fast breathing"}).json()
+    assert s["messages"][-1]["body"] == assistant.URGENT
+    assert assistant.message_language("Mtoto wangu wa miezi 8 hajaanza kukaa, nifanye nini?", "en") == "sw"
+    assert assistant.message_language("How can I help my son talk more?", "sw") == "en"
+    for mixed in ("Sasa, baby ako fiti", "ok", "Asante"):
+        assert assistant.message_language(mixed, "sw") == "sw", mixed
 
 
 def test_limits_errors_and_ownership(client, openai, monkeypatch):
